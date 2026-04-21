@@ -1,0 +1,13 @@
+project_id = "mldkaxtbqimymzzanvfl"
+
+[functions.create-invoice]
+verify_jwt = false
+
+[functions.submit-utr]
+verify_jwt = false
+
+[functions.notification-webhook]
+verify_jwt = false
+
+[functions.pair-device]
+verify_jwt = false
