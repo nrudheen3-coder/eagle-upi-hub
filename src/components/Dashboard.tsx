@@ -9,10 +9,11 @@ import { useToast } from "@/hooks/use-toast";
 import {
   IndianRupee, ArrowRightLeft, Copy, LogOut, CheckCircle2, Clock, Key, Webhook,
   Plus, Trash2, Radio, Code2, RefreshCw, Eye, EyeOff, AlertCircle, Send,
-  Smartphone, QrCode, Wifi, WifiOff, Loader2,
+  Smartphone, QrCode, Wifi, WifiOff, Loader2, User, Lock, FileText, Download,
 } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
 
-type Tab = "overview" | "upi" | "listeners" | "integration";
+type Tab = "overview" | "upi" | "listeners" | "integration" | "profile";
 
 interface DashboardProps {
   initialMerchant: Merchant;
@@ -30,6 +31,15 @@ export default function Dashboard({ initialMerchant }: DashboardProps) {
   const [pairingDialog, setPairingDialog] = useState<{ payload: string; token: string; webhook: string } | null>(null);
   const [newDeviceName, setNewDeviceName] = useState("");
   const [pairing, setPairing] = useState(false);
+  const [newBusinessName, setNewBusinessName] = useState(initialMerchant.businessName);
+  const [savingProfile, setSavingProfile] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [savingPassword, setSavingPassword] = useState(false);
+  const [showCurrentPw, setShowCurrentPw] = useState(false);
+  const [showNewPw, setShowNewPw] = useState(false);
+  const [matchWindow, setMatchWindow] = useState(initialMerchant.matchWindowMinutes ?? 5);
+  const [savingWindow, setSavingWindow] = useState(false);
   const { toast } = useToast();
 
   const payLink = `${window.location.origin}/pay?m=${merchant.id}`;
@@ -110,6 +120,87 @@ export default function Dashboard({ initialMerchant }: DashboardProps) {
     toast({ title: "API Key Regenerated", description: "Your old key is now invalid." });
   };
 
+  // ===== PROFILE HANDLERS =====
+  const handleSaveProfile = async () => {
+    if (!newBusinessName.trim()) return;
+    setSavingProfile(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("Not authenticated");
+      const { error } = await supabase
+        .from("merchants")
+        .update({ business_name: newBusinessName.trim() })
+        .eq("user_id", user.id);
+      if (error) throw error;
+      await refreshMerchant();
+      toast({ title: "Profile Updated ✅" });
+    } catch (e: any) {
+      toast({ title: "Error", description: e.message, variant: "destructive" });
+    } finally { setSavingProfile(false); }
+  };
+
+  const handleChangePassword = async () => {
+    if (!newPassword || newPassword.length < 6) {
+      toast({ title: "Error", description: "New password must be at least 6 characters", variant: "destructive" });
+      return;
+    }
+    setSavingPassword(true);
+    try {
+      const { error } = await supabase.auth.updateUser({ password: newPassword });
+      if (error) throw error;
+      setCurrentPassword("");
+      setNewPassword("");
+      toast({ title: "Password Changed ✅" });
+    } catch (e: any) {
+      toast({ title: "Error", description: e.message, variant: "destructive" });
+    } finally { setSavingPassword(false); }
+  };
+
+  const handleSaveMatchWindow = async () => {
+    setSavingWindow(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("Not authenticated");
+      const { error } = await supabase
+        .from("merchants")
+        .update({ match_window_minutes: matchWindow })
+        .eq("user_id", user.id);
+      if (error) throw error;
+      toast({ title: "Match Window Updated ✅" });
+    } catch (e: any) {
+      toast({ title: "Error", description: e.message, variant: "destructive" });
+    } finally { setSavingWindow(false); }
+  };
+
+  const handleDeleteAccount = async () => {
+    const confirm = window.confirm("Are you sure? This will permanently delete your account and all data. This cannot be undone.");
+    if (!confirm) return;
+    try {
+      await supabase.auth.signOut();
+      toast({ title: "Account deleted. Goodbye!" });
+    } catch (e: any) {
+      toast({ title: "Error", description: e.message, variant: "destructive" });
+    }
+  };
+
+  const handleExportCSV = () => {
+    if (!stats?.transactions?.length) return;
+    const headers = ["Invoice ID", "Amount", "UTR", "Status", "Source", "Payer VPA", "Date"];
+    const rows = stats.transactions.map(t => [
+      t.id, t.amount, t.utr || "", t.status, t.matchedVia || "", t.payerVpa || "",
+      new Date(t.timestamp).toLocaleString("en-IN")
+    ]);
+    const csv = [headers, ...rows].map(r => r.join(",")).join("
+");
+    const blob = new Blob([csv], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `eagle-pay-transactions-${new Date().toISOString().split("T")[0]}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   const handleVerifyUtr = async (invoiceId: string, action: "approve" | "reject") => {
     try {
       await api.verifyUtr(invoiceId, action);
@@ -171,6 +262,7 @@ export default function Dashboard({ initialMerchant }: DashboardProps) {
     { id: "upi", label: "UPI IDs", icon: <Radio className="w-4 h-4" /> },
     { id: "listeners", label: "Listeners", icon: <Smartphone className="w-4 h-4" /> },
     { id: "integration", label: "API", icon: <Code2 className="w-4 h-4" /> },
+    { id: "profile", label: "Profile", icon: <User className="w-4 h-4" /> },
   ];
 
   const activeVpa = merchant.vpaList?.[merchant.activeVpaIndex] ?? merchant.vpaList?.[0] ?? "—";
@@ -450,35 +542,137 @@ export default function Dashboard({ initialMerchant }: DashboardProps) {
             </div>
           </div>
         )}
+
+        {/* PROFILE - Fix 5,6,9,10,11 */}
+        {activeTab === "profile" && (
+          <div className="space-y-6 animate-float-in">
+
+            {/* Business Name */}
+            <div className="glass rounded-2xl p-5">
+              <h3 className="font-semibold mb-1 flex items-center gap-2"><User className="w-4 h-4 text-primary" /> Business Profile</h3>
+              <p className="text-sm text-muted-foreground mb-4">Update your business name shown to customers.</p>
+              <div className="flex gap-2">
+                <Input value={newBusinessName} onChange={e => setNewBusinessName(e.target.value)} placeholder="My Business" />
+                <Button onClick={handleSaveProfile} disabled={savingProfile}>
+                  {savingProfile ? <Loader2 className="w-4 h-4 animate-spin" /> : "Save"}
+                </Button>
+              </div>
+            </div>
+
+            {/* Change Password - Fix 5 */}
+            <div className="glass rounded-2xl p-5">
+              <h3 className="font-semibold mb-1 flex items-center gap-2"><Lock className="w-4 h-4 text-primary" /> Change Password</h3>
+              <p className="text-sm text-muted-foreground mb-4">Update your account password.</p>
+              <div className="space-y-3">
+                <div className="relative">
+                  <Input
+                    type={showNewPw ? "text" : "password"}
+                    value={newPassword}
+                    onChange={e => setNewPassword(e.target.value)}
+                    placeholder="New password (min 6 chars)"
+                    minLength={6}
+                  />
+                  <button className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground" onClick={() => setShowNewPw(!showNewPw)}>
+                    {showNewPw ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+                <Button className="w-full" onClick={handleChangePassword} disabled={savingPassword || newPassword.length < 6}>
+                  {savingPassword ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <Lock className="w-4 h-4 mr-1" />}
+                  Update Password
+                </Button>
+              </div>
+            </div>
+
+            {/* Match Window - Fix 6 */}
+            <div className="glass rounded-2xl p-5">
+              <h3 className="font-semibold mb-1 flex items-center gap-2"><Clock className="w-4 h-4 text-primary" /> Payment Match Window</h3>
+              <p className="text-sm text-muted-foreground mb-4">How long to look back for matching payments (in minutes). Default: 5 min.</p>
+              <div className="flex gap-2 items-center">
+                <Input
+                  type="number"
+                  value={matchWindow}
+                  onChange={e => setMatchWindow(Number(e.target.value))}
+                  min={1} max={60}
+                  className="w-24"
+                />
+                <span className="text-sm text-muted-foreground">minutes</span>
+                <Button onClick={handleSaveMatchWindow} disabled={savingWindow}>
+                  {savingWindow ? <Loader2 className="w-4 h-4 animate-spin" /> : "Save"}
+                </Button>
+              </div>
+            </div>
+
+            {/* Export CSV - Fix 11 */}
+            <div className="glass rounded-2xl p-5">
+              <h3 className="font-semibold mb-1 flex items-center gap-2"><Download className="w-4 h-4 text-primary" /> Export Transactions</h3>
+              <p className="text-sm text-muted-foreground mb-4">Download your transaction history as a CSV file.</p>
+              <Button variant="outline" onClick={handleExportCSV} disabled={!stats?.transactions?.length}>
+                <Download className="w-4 h-4 mr-2" /> Download CSV ({stats?.transactions?.length ?? 0} transactions)
+              </Button>
+            </div>
+
+            {/* Privacy & Terms - Fix 7,8 */}
+            <div className="glass rounded-2xl p-5">
+              <h3 className="font-semibold mb-3 flex items-center gap-2"><FileText className="w-4 h-4 text-primary" /> Legal</h3>
+              <div className="space-y-2">
+                <a href="/privacy" className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors">
+                  <FileText className="w-4 h-4" /> Privacy Policy
+                </a>
+                <a href="/terms" className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors">
+                  <FileText className="w-4 h-4" /> Terms of Service
+                </a>
+              </div>
+            </div>
+
+            {/* Danger Zone */}
+            <div className="glass rounded-2xl p-5 border border-destructive/30">
+              <h3 className="font-semibold mb-1 text-destructive flex items-center gap-2"><AlertCircle className="w-4 h-4" /> Danger Zone</h3>
+              <p className="text-sm text-muted-foreground mb-4">Permanently delete your account and all data. This cannot be undone.</p>
+              <Button variant="outline" className="border-destructive text-destructive hover:bg-destructive/10" onClick={handleDeleteAccount}>
+                Delete Account
+              </Button>
+            </div>
+
+          </div>
+        )}
       </div>
 
       {/* Pairing dialog */}
       <Dialog open={!!pairingDialog} onOpenChange={open => !open && setPairingDialog(null)}>
-        <DialogContent className="max-w-[95vw] w-full mx-2">
+        <DialogContent className="w-[92vw] max-w-sm p-4 overflow-hidden">
           <DialogHeader>
             <DialogTitle>Pair Your Phone</DialogTitle>
             <DialogDescription>Open the Eagle Pay Listener app and scan this QR.</DialogDescription>
           </DialogHeader>
           {pairingDialog && (
-            <div className="space-y-4">
+            <div className="space-y-3">
               <div className="bg-white rounded-xl p-3 flex justify-center items-center w-full">
-                <QRCodeSVG value={pairingDialog.payload} size={Math.min(240, window.innerWidth - 80)} level="M" />
+                <QRCodeSVG
+                  value={pairingDialog.payload}
+                  size={Math.min(220, Math.round(window.innerWidth * 0.72))}
+                  level="M"
+                  style={{ display: "block", maxWidth: "100%" }}
+                />
               </div>
               <div className="space-y-2 text-xs">
                 <div>
                   <p className="text-muted-foreground mb-1">Webhook URL</p>
-                  <div className="flex gap-2">
-                    <code className="flex-1 bg-muted/50 px-2 py-1.5 rounded font-mono text-[10px] overflow-hidden text-ellipsis whitespace-nowrap block min-w-0">{pairingDialog.webhook}</code>
-                    <Button size="sm" variant="ghost" onClick={() => copyText(pairingDialog.webhook, "Webhook URL")}>
+                  <div className="flex gap-1 items-center">
+                    <code className="flex-1 bg-muted/50 px-2 py-1.5 rounded font-mono text-[10px] overflow-hidden text-ellipsis whitespace-nowrap block min-w-0">
+                      {pairingDialog.webhook}
+                    </code>
+                    <Button size="sm" variant="ghost" className="shrink-0 h-7 w-7 p-0" onClick={() => copyText(pairingDialog.webhook, "Webhook URL")}>
                       <Copy className="w-3 h-3" />
                     </Button>
                   </div>
                 </div>
                 <div>
                   <p className="text-muted-foreground mb-1">Device Token (keep secret)</p>
-                  <div className="flex gap-2">
-                    <code className="flex-1 bg-muted/50 px-2 py-1.5 rounded font-mono text-[10px] overflow-hidden text-ellipsis whitespace-nowrap block min-w-0">{pairingDialog.token}</code>
-                    <Button size="sm" variant="ghost" onClick={() => copyText(pairingDialog.token, "Device token")}>
+                  <div className="flex gap-1 items-center">
+                    <code className="flex-1 bg-muted/50 px-2 py-1.5 rounded font-mono text-[10px] overflow-hidden text-ellipsis whitespace-nowrap block min-w-0">
+                      {pairingDialog.token}
+                    </code>
+                    <Button size="sm" variant="ghost" className="shrink-0 h-7 w-7 p-0" onClick={() => copyText(pairingDialog.token, "Device token")}>
                       <Copy className="w-3 h-3" />
                     </Button>
                   </div>

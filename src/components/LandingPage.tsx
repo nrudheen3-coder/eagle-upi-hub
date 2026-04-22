@@ -388,6 +388,8 @@ export default function LandingPage() {
           </p>
           <div className="flex gap-4 text-xs text-muted-foreground">
             <a href="mailto:support@eaglepay.in" className="hover:text-foreground transition-colors">Contact</a>
+            <a href="/privacy" className="hover:text-foreground transition-colors">Privacy</a>
+            <a href="/terms" className="hover:text-foreground transition-colors">Terms</a>
             <a href={APK_URL} download className="hover:text-foreground transition-colors">Download APK</a>
           </div>
         </div>
