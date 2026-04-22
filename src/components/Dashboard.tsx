@@ -461,14 +461,14 @@ export default function Dashboard({ initialMerchant }: DashboardProps) {
           </DialogHeader>
           {pairingDialog && (
             <div className="space-y-4">
-              <div className="bg-foreground rounded-xl p-4 flex justify-center">
+              <div className="bg-white rounded-xl p-3 flex justify-center items-center w-full">
                 <QRCodeSVG value={pairingDialog.payload} size={Math.min(240, window.innerWidth - 80)} level="M" />
               </div>
               <div className="space-y-2 text-xs">
                 <div>
                   <p className="text-muted-foreground mb-1">Webhook URL</p>
                   <div className="flex gap-2">
-                    <code className="flex-1 bg-muted/50 px-2 py-1.5 rounded font-mono truncate">{pairingDialog.webhook}</code>
+                    <code className="flex-1 bg-muted/50 px-2 py-1.5 rounded font-mono text-[10px] overflow-hidden text-ellipsis whitespace-nowrap block min-w-0">{pairingDialog.webhook}</code>
                     <Button size="sm" variant="ghost" onClick={() => copyText(pairingDialog.webhook, "Webhook URL")}>
                       <Copy className="w-3 h-3" />
                     </Button>
@@ -477,7 +477,7 @@ export default function Dashboard({ initialMerchant }: DashboardProps) {
                 <div>
                   <p className="text-muted-foreground mb-1">Device Token (keep secret)</p>
                   <div className="flex gap-2">
-                    <code className="flex-1 bg-muted/50 px-2 py-1.5 rounded font-mono truncate">{pairingDialog.token}</code>
+                    <code className="flex-1 bg-muted/50 px-2 py-1.5 rounded font-mono text-[10px] overflow-hidden text-ellipsis whitespace-nowrap block min-w-0">{pairingDialog.token}</code>
                     <Button size="sm" variant="ghost" onClick={() => copyText(pairingDialog.token, "Device token")}>
                       <Copy className="w-3 h-3" />
                     </Button>
