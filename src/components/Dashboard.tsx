@@ -454,7 +454,7 @@ export default function Dashboard({ initialMerchant }: DashboardProps) {
 
       {/* Pairing dialog */}
       <Dialog open={!!pairingDialog} onOpenChange={open => !open && setPairingDialog(null)}>
-        <DialogContent className="max-w-sm">
+        <DialogContent className="max-w-[95vw] w-full mx-2">
           <DialogHeader>
             <DialogTitle>Pair Your Phone</DialogTitle>
             <DialogDescription>Open the Eagle Pay Listener app and scan this QR.</DialogDescription>
@@ -462,7 +462,7 @@ export default function Dashboard({ initialMerchant }: DashboardProps) {
           {pairingDialog && (
             <div className="space-y-4">
               <div className="bg-foreground rounded-xl p-4 flex justify-center">
-                <QRCodeSVG value={pairingDialog.payload} size={220} level="M" />
+                <QRCodeSVG value={pairingDialog.payload} size={Math.min(240, window.innerWidth - 80)} level="M" />
               </div>
               <div className="space-y-2 text-xs">
                 <div>
