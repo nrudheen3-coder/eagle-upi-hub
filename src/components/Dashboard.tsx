@@ -190,8 +190,7 @@ export default function Dashboard({ initialMerchant }: DashboardProps) {
       t.id, t.amount, t.utr || "", t.status, t.matchedVia || "", t.payerVpa || "",
       new Date(t.timestamp).toLocaleString("en-IN")
     ]);
-    const csv = [headers, ...rows].map(r => r.join(",")).join("
-");
+    const csv = [headers, ...rows].map(r => r.join(",")).join("\n");
     const blob = new Blob([csv], { type: "text/csv" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
