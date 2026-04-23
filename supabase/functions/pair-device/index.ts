@@ -42,7 +42,7 @@ Deno.serve(async (req) => {
       .single();
     if (error || !device) return json({ error: "could not create device" }, 500);
 
-    const webhookUrl = `https://cncizratbemllicuieyy.supabase.co/functions/v1/notification-webhook`;
+    const webhookUrl = `${Deno.env.get("SUPABASE_URL")}/functions/v1/notification-webhook`;
 
     return json({
       device_id: device.id,
