@@ -170,10 +170,13 @@ export const api = {
 
   // PUBLIC — used by /pay page, no auth
   async createInvoice(merchantId: string, amount: number) {
-    const { data, error } = await supabase.functions.invoke("create-invoice", {
-      body: { merchant_id: merchantId, amount },
+    const res = await fetch("/api/create-invoice", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ merchant_id: merchantId, amount }),
     });
-    if (error) throw error;
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "Failed to create invoice");
     return {
       invoiceId: data.invoice_id as string,
       vpa: data.vpa as string,
@@ -182,10 +185,13 @@ export const api = {
   },
 
   async submitUtr(invoiceId: string, utr: string) {
-    const { data, error } = await supabase.functions.invoke("submit-utr", {
-      body: { invoice_id: invoiceId, utr },
+    const res = await fetch("/api/submit-utr", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ invoice_id: invoiceId, utr }),
     });
-    if (error) throw error;
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "Failed to submit UTR");
     return { success: !!data?.success };
   },
 
@@ -250,10 +256,15 @@ export const api = {
   },
 
   async pairDevice(deviceName: string): Promise<{ pairing_payload: string; device_token: string; webhook_url: string }> {
-    const { data, error } = await supabase.functions.invoke("pair-device", {
-      body: { device_name: deviceName },
+    const session = await supabase.auth.getSession();
+    const token = session.data.session?.access_token;
+    const res = await fetch("/api/pair-device", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+      body: JSON.stringify({ device_name: deviceName }),
     });
-    if (error) throw error;
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "Pairing failed");
     return data;
   },
 
@@ -267,7 +278,19 @@ export const api = {
 
   // ============ Manual UTR approval ============
   async verifyUtr(invoiceId: string, action: "approve" | "reject") {
-    const { data, error } = await supabase.functions.invoke("verify-utr", {
+    const session = await supabase.auth.getSession();
+    const token = session.data.session?.access_token;
+    const res = await fetch("/api/verify-utr", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+      body: JSON.stringify({ invoice_id: invoiceId, action }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "Failed");
+    return { success: !!data?.success, status: data?.status };
+  },
+  async _verifyUtrOld(invoiceId: string, action: "approve" | "reject") {
+    const { data, error } = await supabase.functions.invoke("verify-utr-unused", {
       body: { invoice_id: invoiceId, action },
     });
     if (error) throw error;
