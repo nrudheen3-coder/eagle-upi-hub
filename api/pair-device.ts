@@ -34,7 +34,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       .single();
     if (error || !device) return res.status(500).json({ error: "could not create device" });
 
-    const webhookUrl = `${process.env.VERCEL_URL ? "https://" + process.env.VERCEL_URL : process.env.SITE_URL ?? ""}/api/notification-webhook`;
+    // Use SITE_URL env var (set in Vercel to your production domain)
+    // Falls back to request host so it works in preview deployments too
+    const host = process.env.SITE_URL ?? `https://${req.headers.host}`;
+    const webhookUrl = `${host}/api/notification-webhook`;
 
     return res.status(200).json({
       device_id: device.id,

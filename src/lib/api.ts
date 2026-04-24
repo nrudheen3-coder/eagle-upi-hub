@@ -9,6 +9,9 @@ export interface Merchant {
   apiKey: string;
   webhookUrl?: string;
   matchWindowMinutes: number;
+  plan: string;
+  planExpiresAt?: string | null;
+  monthlyTxCount: number;
 }
 
 export interface Transaction {
@@ -75,7 +78,7 @@ export function validateWebhookUrl(raw: string): void {
 async function loadMerchant(userId: string): Promise<Merchant | null> {
   const { data: m } = await supabase
     .from("merchants")
-    .select("id, business_name, api_key, webhook_url, match_window_minutes")
+    .select("id, business_name, api_key, webhook_url, match_window_minutes, plan, plan_expires_at, monthly_tx_count")
     .eq("user_id", userId)
     .maybeSingle();
   if (!m) return null;
@@ -97,6 +100,9 @@ async function loadMerchant(userId: string): Promise<Merchant | null> {
     apiKey: m.api_key,
     webhookUrl: m.webhook_url ?? undefined,
     matchWindowMinutes: m.match_window_minutes,
+    plan: m.plan ?? "free",
+    planExpiresAt: m.plan_expires_at ?? null,
+    monthlyTxCount: m.monthly_tx_count ?? 0,
   };
 }
 
@@ -317,13 +323,6 @@ export const api = {
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || "Failed");
-    return { success: !!data?.success, status: data?.status };
-  },
-  async _verifyUtrOld(invoiceId: string, action: "approve" | "reject") {
-    const { data, error } = await supabase.functions.invoke("verify-utr-unused", {
-      body: { invoice_id: invoiceId, action },
-    });
-    if (error) throw error;
     return { success: !!data?.success, status: data?.status };
   },
 };
