@@ -3,7 +3,8 @@ import { QRCodeSVG } from "qrcode.react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { api, Merchant, MerchantStats, Transaction, ListenerDevice } from "@/lib/api";
+import { api, Merchant, MerchantStats, Transaction, ListenerDevice, DailyRevenue } from "@/lib/api";
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from "recharts";
 import { auth } from "@/lib/auth";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -48,6 +49,23 @@ export default function Dashboard({ initialMerchant }: DashboardProps) {
     const m = await api.getCurrentMerchant();
     if (m) setMerchant(m);
   }, []);
+
+  // Fix 9: Realtime subscription for instant updates
+  useEffect(() => {
+    if (!merchant?.id) return;
+    const channel = supabase
+      .channel("transactions-realtime")
+      .on("postgres_changes", {
+        event: "*",
+        schema: "public",
+        table: "transactions",
+        filter: `merchant_id=eq.${merchant.id}`,
+      }, () => {
+        fetchStats();
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [merchant?.id]);
 
   const fetchStats = useCallback(async () => {
     try { setStats(await api.getStats()); } catch { /* ignore */ }
@@ -190,7 +208,8 @@ export default function Dashboard({ initialMerchant }: DashboardProps) {
       t.id, t.amount, t.utr || "", t.status, t.matchedVia || "", t.payerVpa || "",
       new Date(t.timestamp).toLocaleString("en-IN")
     ]);
-    const csv = [headers, ...rows].map(r => r.join(",")).join("\n");
+    const csv = [headers, ...rows].map(r => r.join(",")).join("
+");
     const blob = new Blob([csv], { type: "text/csv" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -303,6 +322,30 @@ export default function Dashboard({ initialMerchant }: DashboardProps) {
         {/* OVERVIEW */}
         {activeTab === "overview" && (
           <div className="space-y-6 animate-float-in">
+
+            {/* Plan upgrade banner - Fix 5 */}
+            {merchant.plan === "free" && stats && stats.totalTransactions >= 40 && (
+              <div className="glass rounded-xl p-4 border border-warning/40 flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-sm font-semibold text-warning">⚠️ Approaching free plan limit</p>
+                  <p className="text-xs text-muted-foreground">{stats.totalTransactions}/50 transactions used this month</p>
+                </div>
+                <Button size="sm" className="gradient-primary text-primary-foreground shrink-0" onClick={() => setActiveTab("profile")}>
+                  Upgrade
+                </Button>
+              </div>
+            )}
+            {merchant.plan === "free" && stats && stats.totalTransactions >= 50 && (
+              <div className="glass rounded-xl p-4 border border-destructive/40 flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-sm font-semibold text-destructive">🚫 Free plan limit reached</p>
+                  <p className="text-xs text-muted-foreground">Upgrade to accept more payments this month</p>
+                </div>
+                <Button size="sm" className="gradient-primary text-primary-foreground shrink-0" onClick={() => setActiveTab("profile")}>
+                  Upgrade Now
+                </Button>
+              </div>
+            )}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="glass rounded-2xl p-6 glow-primary">
                 <div className="flex items-center gap-2 text-muted-foreground text-sm mb-2">
@@ -319,6 +362,69 @@ export default function Dashboard({ initialMerchant }: DashboardProps) {
                 <p className="text-3xl md:text-4xl font-bold">{stats?.totalTransactions ?? "—"}</p>
               </div>
             </div>
+
+            {/* Fix 8: Revenue Chart */}
+            {stats && stats.weeklyRevenue && (
+              <div className="glass rounded-2xl p-5">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="font-semibold text-sm flex items-center gap-2">
+                    <IndianRupee className="w-4 h-4 text-primary" /> Last 7 Days Revenue
+                  </h3>
+                  <div className="flex gap-3 text-xs text-muted-foreground">
+                    <span className="flex items-center gap-1"><CheckCircle2 className="w-3 h-3 text-success" /> {stats.verifiedCount} verified</span>
+                    <span className="flex items-center gap-1"><Clock className="w-3 h-3 text-warning" /> {stats.pendingCount} pending</span>
+                  </div>
+                </div>
+                <ResponsiveContainer width="100%" height={140}>
+                  <BarChart data={stats.weeklyRevenue} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
+                    <XAxis dataKey="date" tick={{ fontSize: 11 }} axisLine={false} tickLine={false} />
+                    <YAxis tick={{ fontSize: 11 }} axisLine={false} tickLine={false} />
+                    <Tooltip
+                      formatter={(v: number) => [`₹${v.toLocaleString("en-IN")}`, "Revenue"]}
+                      contentStyle={{ background: "hsl(var(--background))", border: "1px solid hsl(var(--border))", borderRadius: 8, fontSize: 11 }}
+                    />
+                    <Bar dataKey="amount" radius={[4, 4, 0, 0]}>
+                      {stats.weeklyRevenue.map((_, i) => (
+                        <Cell key={i} fill={i === 6 ? "hsl(var(--primary))" : "hsl(var(--muted))"} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            )}
+
+            {/* Fix 10: Onboarding checklist for new merchants */}
+            {stats && stats.totalTransactions === 0 && (
+              <div className="glass rounded-2xl p-5 border border-primary/20">
+                <h3 className="font-semibold mb-1 flex items-center gap-2">
+                  🚀 Get Started with Eagle Pay
+                </h3>
+                <p className="text-xs text-muted-foreground mb-4">Complete these steps to start accepting payments</p>
+                <div className="space-y-3">
+                  {[
+                    { done: merchant.vpaList?.length > 0, label: "Add your UPI VPA", tab: "upi", action: "Add VPA →" },
+                    { done: devices.length > 0, label: "Pair your Android device for auto-verify", tab: "listeners", action: "Pair Device →" },
+                    { done: !!merchant.webhookUrl, label: "Set up your webhook URL", tab: "integration", action: "Set Webhook →" },
+                    { done: false, label: "Share your payment link with a customer", tab: null, action: null },
+                  ].map((step, i) => (
+                    <div key={i} className="flex items-center gap-3">
+                      <div className={`w-5 h-5 rounded-full flex items-center justify-center shrink-0 ${step.done ? "bg-success/20" : "bg-muted"}`}>
+                        {step.done
+                          ? <CheckCircle2 className="w-3 h-3 text-success" />
+                          : <span className="text-xs text-muted-foreground">{i + 1}</span>
+                        }
+                      </div>
+                      <p className={`text-sm flex-1 ${step.done ? "line-through text-muted-foreground" : ""}`}>{step.label}</p>
+                      {!step.done && step.tab && (
+                        <button className="text-xs text-primary hover:underline" onClick={() => setActiveTab(step.tab as any)}>
+                          {step.action}
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* Listener status banner */}
             <div className="glass rounded-2xl p-5">
@@ -620,6 +726,35 @@ export default function Dashboard({ initialMerchant }: DashboardProps) {
                 <a href="/terms" className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors">
                   <FileText className="w-4 h-4" /> Terms of Service
                 </a>
+              </div>
+            </div>
+
+            {/* Fix 11: APK Release Guide */}
+            <div className="glass rounded-2xl p-5">
+              <h3 className="font-semibold mb-1 flex items-center gap-2">
+                <Download className="w-4 h-4 text-primary" /> Upload APK to GitHub Releases
+              </h3>
+              <p className="text-sm text-muted-foreground mb-3">So the download button on your landing page works.</p>
+              <div className="bg-muted/30 rounded-lg p-3 text-xs font-mono space-y-1">
+                <p className="text-muted-foreground"># In Termux, after building APK:</p>
+                <p>cd ~/UPI-listner</p>
+                <p>gh release create v1.0.0 app/build/outputs/apk/debug/app-debug.apk</p>
+              </div>
+              <p className="text-xs text-muted-foreground mt-2">Or go to github.com → your repo → Releases → Create new release → Upload APK</p>
+            </div>
+
+            {/* Fix 12: Custom Domain Guide */}
+            <div className="glass rounded-2xl p-5">
+              <h3 className="font-semibold mb-1 flex items-center gap-2">
+                <FileText className="w-4 h-4 text-primary" /> Add Custom Domain
+              </h3>
+              <p className="text-sm text-muted-foreground mb-3">Replace vercel.app with your own domain.</p>
+              <div className="space-y-2 text-xs text-muted-foreground">
+                <p>1. Buy domain at <span className="text-primary">namecheap.com</span> or <span className="text-primary">bigrock.in</span></p>
+                <p>2. Go to <span className="text-primary">vercel.com</span> → your project → Settings → Domains</p>
+                <p>3. Add your domain → copy the DNS records shown</p>
+                <p>4. Add DNS records in your domain registrar</p>
+                <p>5. Wait 5-10 minutes → your site is live on custom domain ✅</p>
               </div>
             </div>
 

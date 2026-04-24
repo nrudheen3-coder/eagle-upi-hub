@@ -22,10 +22,19 @@ export interface Transaction {
   matchedVia?: string;
 }
 
+export interface DailyRevenue {
+  date: string;
+  amount: number;
+  count: number;
+}
+
 export interface MerchantStats {
   todayTotal: number;
   totalTransactions: number;
   transactions: Transaction[];
+  weeklyRevenue: DailyRevenue[];
+  verifiedCount: number;
+  pendingCount: number;
 }
 
 export interface ListenerDevice {
@@ -165,7 +174,28 @@ export const api = {
       .filter(t => (t.status === "verified" || t.status === "submitted") && new Date(t.timestamp) >= todayStart)
       .reduce((s, t) => s + t.amount, 0);
 
-    return { todayTotal, totalTransactions: list.length, transactions: list };
+    // Build last 7 days revenue chart
+    const weeklyRevenue: DailyRevenue[] = Array.from({ length: 7 }, (_, i) => {
+      const d = new Date();
+      d.setDate(d.getDate() - (6 - i));
+      d.setHours(0, 0, 0, 0);
+      const next = new Date(d); next.setDate(d.getDate() + 1);
+      const dayTxns = list.filter(t =>
+        t.status === "verified" &&
+        new Date(t.timestamp) >= d &&
+        new Date(t.timestamp) < next
+      );
+      return {
+        date: d.toLocaleDateString("en-IN", { weekday: "short" }),
+        amount: dayTxns.reduce((s, t) => s + t.amount, 0),
+        count: dayTxns.length,
+      };
+    });
+
+    const verifiedCount = list.filter(t => t.status === "verified").length;
+    const pendingCount = list.filter(t => ["pending_payment", "pending_utr", "submitted"].includes(t.status)).length;
+
+    return { todayTotal, totalTransactions: list.length, transactions: list, weeklyRevenue, verifiedCount, pendingCount };
   },
 
   // PUBLIC — used by /pay page, no auth
