@@ -773,47 +773,53 @@ export default function Dashboard({ initialMerchant }: DashboardProps) {
 
       {/* Pairing dialog */}
       <Dialog open={!!pairingDialog} onOpenChange={open => !open && setPairingDialog(null)}>
-        <DialogContent className="w-[92vw] max-w-sm p-4 overflow-hidden">
-          <DialogHeader>
-            <DialogTitle>Pair Your Phone</DialogTitle>
-            <DialogDescription>Open the Eagle Pay Listener app and scan this QR.</DialogDescription>
-          </DialogHeader>
+        <DialogContent className="w-screen max-w-[100vw] sm:max-w-sm h-auto max-h-[90vh] overflow-y-auto p-0 rounded-t-2xl sm:rounded-2xl bottom-0 sm:bottom-auto fixed sm:relative">
+          <div className="p-4">
+            <DialogHeader className="mb-3">
+              <DialogTitle>Pair Your Phone</DialogTitle>
+              <DialogDescription>Open Eagle Pay Listener app and scan this QR.</DialogDescription>
+            </DialogHeader>
+          </div>
           {pairingDialog && (
-            <div className="space-y-3">
-              <div className="bg-white rounded-xl p-3 flex justify-center items-center w-full">
+            <div className="px-4 pb-6 space-y-4">
+              {/* QR Code — full width, centered */}
+              <div className="bg-white rounded-2xl p-4 flex justify-center items-center w-full">
                 <QRCodeSVG
                   value={pairingDialog.payload}
-                  size={Math.min(220, Math.round(window.innerWidth * 0.72))}
+                  size={Math.min(260, Math.round(window.innerWidth * 0.75))}
                   level="M"
-                  style={{ display: "block", maxWidth: "100%" }}
+                  style={{ width: "100%", height: "auto", maxWidth: 260 }}
                 />
               </div>
-              <div className="space-y-2 text-xs">
-                <div>
-                  <p className="text-muted-foreground mb-1">Webhook URL</p>
-                  <div className="flex gap-1 items-center">
-                    <code className="flex-1 bg-muted/50 px-2 py-1.5 rounded font-mono text-[10px] overflow-hidden text-ellipsis whitespace-nowrap block min-w-0">
-                      {pairingDialog.webhook}
-                    </code>
-                    <Button size="sm" variant="ghost" className="shrink-0 h-7 w-7 p-0" onClick={() => copyText(pairingDialog.webhook, "Webhook URL")}>
-                      <Copy className="w-3 h-3" />
-                    </Button>
-                  </div>
-                </div>
-                <div>
-                  <p className="text-muted-foreground mb-1">Device Token (keep secret)</p>
-                  <div className="flex gap-1 items-center">
-                    <code className="flex-1 bg-muted/50 px-2 py-1.5 rounded font-mono text-[10px] overflow-hidden text-ellipsis whitespace-nowrap block min-w-0">
-                      {pairingDialog.token}
-                    </code>
-                    <Button size="sm" variant="ghost" className="shrink-0 h-7 w-7 p-0" onClick={() => copyText(pairingDialog.token, "Device token")}>
-                      <Copy className="w-3 h-3" />
-                    </Button>
-                  </div>
+
+              {/* Webhook URL */}
+              <div>
+                <p className="text-xs text-muted-foreground mb-1">Webhook URL</p>
+                <div className="flex gap-1 items-center bg-muted/50 rounded-lg px-2 py-2">
+                  <code className="flex-1 text-[10px] font-mono overflow-hidden text-ellipsis whitespace-nowrap min-w-0">
+                    {pairingDialog.webhook}
+                  </code>
+                  <Button size="sm" variant="ghost" className="shrink-0 h-6 w-6 p-0" onClick={() => copyText(pairingDialog.webhook, "Webhook URL")}>
+                    <Copy className="w-3 h-3" />
+                  </Button>
                 </div>
               </div>
+
+              {/* Device Token */}
+              <div>
+                <p className="text-xs text-muted-foreground mb-1">Device Token (keep secret)</p>
+                <div className="flex gap-1 items-center bg-muted/50 rounded-lg px-2 py-2">
+                  <code className="flex-1 text-[10px] font-mono overflow-hidden text-ellipsis whitespace-nowrap min-w-0">
+                    {pairingDialog.token}
+                  </code>
+                  <Button size="sm" variant="ghost" className="shrink-0 h-6 w-6 p-0" onClick={() => copyText(pairingDialog.token, "Device token")}>
+                    <Copy className="w-3 h-3" />
+                  </Button>
+                </div>
+              </div>
+
               <p className="text-xs text-muted-foreground text-center">
-                The device will appear as "Online" once it sends its first heartbeat.
+                Device appears "Online" after first heartbeat ping.
               </p>
             </div>
           )}
