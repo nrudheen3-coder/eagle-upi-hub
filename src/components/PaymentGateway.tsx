@@ -90,22 +90,11 @@ export default function PaymentGateway({ merchantId }: PaymentGatewayProps) {
 
   const timerColor = timeLeft < 60 ? "text-destructive" : timeLeft < 180 ? "text-warning" : "text-muted-foreground";
 
-  // Fix 2: Load merchant info on mount to check if merchant exists
+  // Fix 2: Show skeleton briefly then load
   useEffect(() => {
-    const checkMerchant = async () => {
-      try {
-        const res = await fetch(`/api/create-invoice`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ merchant_id: merchantId, amount: 1, _check_only: true }),
-        });
-        // Even if it fails (we don't want to create invoice), merchant is reachable
-      } catch {}
-      finally { setPageLoading(false); }
-    };
-    // Short delay to show skeleton
-    setTimeout(() => setPageLoading(false), 600);
-  }, [merchantId]);
+    const timer = setTimeout(() => setPageLoading(false), 500);
+    return () => clearTimeout(timer);
+  }, []);
 
   const startPayment = async () => {
     const parsedAmt = parseFloat(amount);

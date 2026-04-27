@@ -6,6 +6,22 @@ function hmacSign(secret: string, payload: string): string {
   return createHmac("sha256", secret).update(payload).digest("hex");
 }
 
+async function fireWebhookWithRetry(webhookUrl: string, payload: object, secret: string, attempts = 3) {
+  const body = JSON.stringify(payload);
+  const sig = hmacSign(secret, body);
+  for (let i = 0; i < attempts; i++) {
+    try {
+      const res = await fetch(webhookUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-EaglePay-Signature": sig },
+        body,
+      });
+      if (res.ok) return;
+    } catch {}
+    if (i < attempts - 1) await new Promise(r => setTimeout(r, 1000 * Math.pow(2, i)));
+  }
+}
+
 function isSafeUrl(raw: string): boolean {
   try {
     const u = new URL(raw);
@@ -55,16 +71,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }).eq("id", txn.id);
 
     if (action === "approve" && merchant.webhook_url && isSafeUrl(merchant.webhook_url)) {
-      const payload = JSON.stringify({
-        event: "payment.verified", invoice_id: txn.invoice_id,
-        amount: txn.amount, utr: txn.utr, source: "manual_approval",
-        payer_vpa: txn.payer_vpa, timestamp: new Date().toISOString(),
-      });
-      fetch(merchant.webhook_url, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "X-EaglePay-Signature": hmacSign(process.env.WEBHOOK_SECRET ?? "default_secret", payload) },
-        body: payload,
-      }).catch(console.error);
+      fireWebhookWithRetry(merchant.webhook_url, {
+        event: "payment.verified",
+        invoice_id: txn.invoice_id,
+        amount: txn.amount,
+        utr: txn.utr,
+        source: "manual_approval",
+        payer_vpa: txn.payer_vpa,
+        timestamp: new Date().toISOString(),
+      }, process.env.WEBHOOK_SECRET ?? "default_secret").catch(console.error);
     }
 
     return res.status(200).json({ success: true, status: newStatus });
