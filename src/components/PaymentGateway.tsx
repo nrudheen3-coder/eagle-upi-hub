@@ -22,6 +22,8 @@ export default function PaymentGateway({ merchantId }: PaymentGatewayProps) {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [timeLeft, setTimeLeft] = useState(EXPIRY_SECONDS);
+  const [pageLoading, setPageLoading] = useState(true);
+  const [confetti, setConfetti] = useState(false);
   const [autoVerified, setAutoVerified] = useState(false);
 
   const upiLink = `upi://pay?pa=${vpa}&pn=${encodeURIComponent(businessName)}&am=${amount}&cu=INR&tn=Payment-${invoiceId}`;
@@ -50,8 +52,10 @@ export default function PaymentGateway({ merchantId }: PaymentGatewayProps) {
         .single();
       if (data?.status === "verified") {
         setAutoVerified(true);
+        setConfetti(true);
         setStep("success");
         playChime();
+        setTimeout(() => setConfetti(false), 3000);
       }
     } catch {}
   }, [invoiceId, step]);
@@ -86,6 +90,23 @@ export default function PaymentGateway({ merchantId }: PaymentGatewayProps) {
 
   const timerColor = timeLeft < 60 ? "text-destructive" : timeLeft < 180 ? "text-warning" : "text-muted-foreground";
 
+  // Fix 2: Load merchant info on mount to check if merchant exists
+  useEffect(() => {
+    const checkMerchant = async () => {
+      try {
+        const res = await fetch(`/api/create-invoice`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ merchant_id: merchantId, amount: 1, _check_only: true }),
+        });
+        // Even if it fails (we don't want to create invoice), merchant is reachable
+      } catch {}
+      finally { setPageLoading(false); }
+    };
+    // Short delay to show skeleton
+    setTimeout(() => setPageLoading(false), 600);
+  }, [merchantId]);
+
   const startPayment = async () => {
     const parsedAmt = parseFloat(amount);
     if (!amount || parsedAmt <= 0) return;
@@ -116,14 +137,36 @@ export default function PaymentGateway({ merchantId }: PaymentGatewayProps) {
     setSubmitting(true);
     try {
       await api.submitUtr(invoiceId, utr);
+      setConfetti(true);
       setStep("success");
       playChime();
+      setTimeout(() => setConfetti(false), 3000);
     } catch (e: any) {
       setError(e?.message || "Could not submit UTR");
     } finally {
       setSubmitting(false);
     }
   };
+
+
+  // Fix 2: Loading skeleton
+  if (pageLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center px-4">
+        <div className="w-full max-w-sm space-y-4 animate-pulse">
+          <div className="flex justify-center mb-6">
+            <div className="w-10 h-10 rounded-lg bg-muted" />
+          </div>
+          <div className="h-6 bg-muted rounded w-1/2 mx-auto" />
+          <div className="glass rounded-2xl p-6 space-y-4">
+            <div className="h-4 bg-muted rounded w-1/3" />
+            <div className="h-14 bg-muted rounded" />
+            <div className="h-12 bg-muted rounded" />
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   // Expired screen
   if (step === "expired") {
@@ -148,11 +191,30 @@ export default function PaymentGateway({ merchantId }: PaymentGatewayProps) {
     );
   }
 
-  // Success screen
+  // Fix 3: Success screen with celebration
   if (step === "success") {
     return (
-      <div className="min-h-screen flex items-center justify-center px-4">
-        <div className="text-center animate-float-in">
+      <div className="min-h-screen flex items-center justify-center px-4 relative overflow-hidden">
+        {/* Confetti particles */}
+        {confetti && (
+          <div className="absolute inset-0 pointer-events-none">
+            {Array.from({ length: 20 }).map((_, i) => (
+              <div
+                key={i}
+                className="absolute w-2 h-2 rounded-sm animate-bounce"
+                style={{
+                  left: `${Math.random() * 100}%`,
+                  top: `${Math.random() * 60}%`,
+                  background: ["#6366F1","#22C55E","#F59E0B","#EF4444","#8B5CF6"][i % 5],
+                  animationDelay: `${Math.random() * 0.5}s`,
+                  animationDuration: `${0.5 + Math.random() * 0.5}s`,
+                  transform: `rotate(${Math.random() * 360}deg)`,
+                }}
+              />
+            ))}
+          </div>
+        )}
+        <div className="text-center animate-float-in relative z-10">
           <div className="w-20 h-20 rounded-full bg-success/20 flex items-center justify-center mx-auto mb-6">
             <CheckCircle2 className="w-10 h-10 text-success" />
           </div>

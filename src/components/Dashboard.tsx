@@ -208,7 +208,8 @@ export default function Dashboard({ initialMerchant }: DashboardProps) {
       t.id, t.amount, t.utr || "", t.status, t.matchedVia || "", t.payerVpa || "",
       new Date(t.timestamp).toLocaleString("en-IN")
     ]);
-    const csv = [headers, ...rows].map(r => r.join(",")).join("\n");
+    const csv = [headers, ...rows].map(r => r.join(",")).join("
+");
     const blob = new Blob([csv], { type: "text/csv" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -482,7 +483,22 @@ export default function Dashboard({ initialMerchant }: DashboardProps) {
                 <ArrowRightLeft className="w-4 h-4 text-primary" /> Recent Transactions
               </h3>
               {!stats?.transactions?.length ? (
-                <p className="text-sm text-muted-foreground text-center py-8">No transactions yet</p>
+                <div className="text-center py-10 space-y-3">
+                  <div className="w-14 h-14 rounded-2xl bg-muted/50 flex items-center justify-center mx-auto">
+                    <ArrowRightLeft className="w-6 h-6 text-muted-foreground" />
+                  </div>
+                  <p className="font-medium text-sm">No transactions yet</p>
+                  <p className="text-xs text-muted-foreground max-w-[200px] mx-auto leading-relaxed">
+                    Share your payment link to start accepting UPI payments
+                  </p>
+                  <Button size="sm" variant="outline" className="mt-2" onClick={() => {
+                    const url = `${window.location.origin}/pay?m=${merchant.id}`;
+                    navigator.clipboard.writeText(url);
+                    toast({ title: "Payment link copied! 🔗" });
+                  }}>
+                    <Copy className="w-3 h-3 mr-1.5" /> Copy Payment Link
+                  </Button>
+                </div>
               ) : (
                 <div className="space-y-2 max-h-80 overflow-y-auto">
                   {stats.transactions.map(tx => (
