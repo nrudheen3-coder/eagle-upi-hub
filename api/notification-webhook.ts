@@ -6,6 +6,19 @@ function hmacSign(secret: string, payload: string): string {
   return createHmac("sha256", secret).update(payload).digest("hex");
 }
 
+// Rate limiter: max 60 requests per device token per minute
+const webhookRateMap = new Map<string, { count: number; resetAt: number }>();
+function isWebhookRateLimited(token: string): boolean {
+  const now = Date.now();
+  const entry = webhookRateMap.get(token);
+  if (!entry || now > entry.resetAt) {
+    webhookRateMap.set(token, { count: 1, resetAt: now + 60_000 });
+    return false;
+  }
+  entry.count++;
+  return entry.count > 60;
+}
+
 function isSafeUrl(raw: string): boolean {
   try {
     const u = new URL(raw);
@@ -27,6 +40,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const deviceToken = req.headers["x-device-token"] as string;
   if (!deviceToken) return res.status(401).json({ error: "missing X-Device-Token" });
+
+  // Rate limit per device token
+  if (isWebhookRateLimited(deviceToken)) return res.status(429).json({ error: "too many requests" });
 
   try {
     const body = req.body;

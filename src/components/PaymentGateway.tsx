@@ -87,7 +87,12 @@ export default function PaymentGateway({ merchantId }: PaymentGatewayProps) {
   const timerColor = timeLeft < 60 ? "text-destructive" : timeLeft < 180 ? "text-warning" : "text-muted-foreground";
 
   const startPayment = async () => {
-    if (!amount || parseFloat(amount) <= 0) return;
+    const parsedAmt = parseFloat(amount);
+    if (!amount || parsedAmt <= 0) return;
+    if (parsedAmt > 200000) {
+      setError("Maximum payment amount is ₹2,00,000");
+      return;
+    }
     setError("");
     try {
       const res = await api.createInvoice(merchantId, parseFloat(amount));
@@ -97,7 +102,12 @@ export default function PaymentGateway({ merchantId }: PaymentGatewayProps) {
       setTimeLeft(EXPIRY_SECONDS);
       setStep("pay");
     } catch (e: any) {
-      setError(e?.message || "Could not create invoice. Check the merchant link.");
+      const msg = e?.message || "Could not create invoice.";
+      if (msg.includes("Monthly limit")) {
+        setError("This merchant has reached their monthly payment limit. Please contact them directly.");
+      } else {
+        setError(msg);
+      }
     }
   };
 
@@ -207,6 +217,7 @@ export default function PaymentGateway({ merchantId }: PaymentGatewayProps) {
                     placeholder="0.00"
                     className="pl-9 text-2xl font-bold h-14"
                     min="1"
+                    max="200000"
                     autoFocus
                   />
                 </div>

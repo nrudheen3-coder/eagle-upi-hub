@@ -2,6 +2,19 @@ import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { createClient } from "@supabase/supabase-js";
 import { createHmac } from "crypto";
 
+// Rate limiter: max 10 UTR submissions per IP per minute
+const submitRateMap = new Map<string, { count: number; resetAt: number }>();
+function isRateLimited(ip: string): boolean {
+  const now = Date.now();
+  const entry = submitRateMap.get(ip);
+  if (!entry || now > entry.resetAt) {
+    submitRateMap.set(ip, { count: 1, resetAt: now + 60_000 });
+    return false;
+  }
+  entry.count++;
+  return entry.count > 10;
+}
+
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
@@ -45,6 +58,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   res.setHeader("Access-Control-Allow-Methods", corsHeaders["Access-Control-Allow-Methods"]);
 
   if (req.method === "OPTIONS") return res.status(200).end();
+
+  // Rate limit
+  const ip = (req.headers["x-forwarded-for"] as string)?.split(",")[0].trim() ?? "unknown";
+  if (isRateLimited(ip)) return res.status(429).json({ error: "too many requests" });
 
   try {
     const { invoice_id, utr } = req.body;
