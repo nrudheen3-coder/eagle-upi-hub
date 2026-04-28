@@ -10,7 +10,7 @@ interface PaymentGatewayProps {
   merchantId: string;
 }
 
-const EXPIRY_SECONDS = 15 * 60; // 15 minutes
+const EXPIRY_SECONDS = 15 * 60;
 
 export default function PaymentGateway({ merchantId }: PaymentGatewayProps) {
   const [amount, setAmount] = useState("");
@@ -22,13 +22,19 @@ export default function PaymentGateway({ merchantId }: PaymentGatewayProps) {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [timeLeft, setTimeLeft] = useState(EXPIRY_SECONDS);
+  const [autoVerified, setAutoVerified] = useState(false);
   const [pageLoading, setPageLoading] = useState(true);
   const [confetti, setConfetti] = useState(false);
-  const [autoVerified, setAutoVerified] = useState(false);
 
   const upiLink = `upi://pay?pa=${vpa}&pn=${encodeURIComponent(businessName)}&am=${amount}&cu=INR&tn=Payment-${invoiceId}`;
 
-  // Fix 1: Countdown timer
+  // Loading skeleton timer
+  useEffect(() => {
+    const timer = setTimeout(() => setPageLoading(false), 500);
+    return () => clearTimeout(timer);
+  }, []);
+
+  // Countdown timer
   useEffect(() => {
     if (step !== "pay" && step !== "utr") return;
     if (timeLeft <= 0) { setStep("expired"); return; }
@@ -41,7 +47,7 @@ export default function PaymentGateway({ merchantId }: PaymentGatewayProps) {
     return () => clearInterval(timer);
   }, [step]);
 
-  // Fix 2: Poll for auto-verification
+  // Poll for auto-verification
   const pollStatus = useCallback(async () => {
     if (!invoiceId || step === "success" || step === "expired") return;
     try {
@@ -90,12 +96,6 @@ export default function PaymentGateway({ merchantId }: PaymentGatewayProps) {
 
   const timerColor = timeLeft < 60 ? "text-destructive" : timeLeft < 180 ? "text-warning" : "text-muted-foreground";
 
-  // Fix 2: Show skeleton briefly then load
-  useEffect(() => {
-    const timer = setTimeout(() => setPageLoading(false), 500);
-    return () => clearTimeout(timer);
-  }, []);
-
   const startPayment = async () => {
     const parsedAmt = parseFloat(amount);
     if (!amount || parsedAmt <= 0) return;
@@ -105,7 +105,7 @@ export default function PaymentGateway({ merchantId }: PaymentGatewayProps) {
     }
     setError("");
     try {
-      const res = await api.createInvoice(merchantId, parseFloat(amount));
+      const res = await api.createInvoice(merchantId, parsedAmt);
       setInvoiceId(res.invoiceId);
       setVpa(res.vpa);
       setBusinessName(res.businessName);
@@ -137,8 +137,7 @@ export default function PaymentGateway({ merchantId }: PaymentGatewayProps) {
     }
   };
 
-
-  // Fix 2: Loading skeleton
+  // Loading skeleton
   if (pageLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center px-4">
@@ -180,11 +179,10 @@ export default function PaymentGateway({ merchantId }: PaymentGatewayProps) {
     );
   }
 
-  // Fix 3: Success screen with celebration
+  // Success screen with confetti
   if (step === "success") {
     return (
       <div className="min-h-screen flex items-center justify-center px-4 relative overflow-hidden">
-        {/* Confetti particles */}
         {confetti && (
           <div className="absolute inset-0 pointer-events-none">
             {Array.from({ length: 20 }).map((_, i) => (
@@ -192,12 +190,12 @@ export default function PaymentGateway({ merchantId }: PaymentGatewayProps) {
                 key={i}
                 className="absolute w-2 h-2 rounded-sm animate-bounce"
                 style={{
-                  left: `${Math.random() * 100}%`,
-                  top: `${Math.random() * 60}%`,
-                  background: ["#6366F1","#22C55E","#F59E0B","#EF4444","#8B5CF6"][i % 5],
-                  animationDelay: `${Math.random() * 0.5}s`,
-                  animationDuration: `${0.5 + Math.random() * 0.5}s`,
-                  transform: `rotate(${Math.random() * 360}deg)`,
+                  left: `${(i * 5.3) % 100}%`,
+                  top: `${(i * 7.1) % 60}%`,
+                  background: ["#6366F1", "#22C55E", "#F59E0B", "#EF4444", "#8B5CF6"][i % 5],
+                  animationDelay: `${(i * 0.07) % 0.5}s`,
+                  animationDuration: `${0.5 + (i * 0.03) % 0.5}s`,
+                  transform: `rotate(${(i * 17) % 360}deg)`,
                 }}
               />
             ))}
@@ -224,6 +222,7 @@ export default function PaymentGateway({ merchantId }: PaymentGatewayProps) {
     );
   }
 
+  // Main payment flow
   return (
     <div className="min-h-screen flex items-center justify-center px-4">
       <div className="w-full max-w-sm">
@@ -237,7 +236,6 @@ export default function PaymentGateway({ merchantId }: PaymentGatewayProps) {
           {step === "pay" && <p className="text-sm text-muted-foreground font-mono mt-1">{vpa}</p>}
         </div>
 
-        {/* Fix 1: Timer bar */}
         {(step === "pay" || step === "utr") && (
           <div className="flex items-center justify-center gap-2 mb-4">
             <Clock className={`w-4 h-4 ${timerColor}`} />
@@ -295,7 +293,6 @@ export default function PaymentGateway({ merchantId }: PaymentGatewayProps) {
                   <QrCode className="w-4 h-4 mr-2" /> Open UPI App
                 </Button>
               </a>
-              {/* Fix 2: polling indicator */}
               <div className="flex items-center justify-center gap-2 text-xs text-muted-foreground">
                 <Loader2 className="w-3 h-3 animate-spin" />
                 Waiting for payment...
@@ -315,7 +312,7 @@ export default function PaymentGateway({ merchantId }: PaymentGatewayProps) {
                 <p className="text-xs text-muted-foreground mt-1">to {businessName}</p>
               </div>
               <div>
-                <label className="text-sm text-muted-foreground mb-1 block">Enter UTR / Transaction Reference Number</label>
+                <label className="text-sm text-muted-foreground mb-1 block">Enter UTR / Transaction Reference</label>
                 <Input
                   value={utr}
                   onChange={e => setUtr(e.target.value)}
@@ -332,7 +329,7 @@ export default function PaymentGateway({ merchantId }: PaymentGatewayProps) {
                 onClick={handleSubmitUtr}
                 disabled={!utr || utr.length < 6 || submitting}
               >
-                {submitting ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
+                {submitting && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
                 Submit Payment Proof
               </Button>
               <Button variant="ghost" className="w-full text-sm" onClick={() => setStep("pay")}>
