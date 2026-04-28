@@ -660,7 +660,7 @@ export default function Dashboard({ initialMerchant }: DashboardProps) {
               <h3 className="font-semibold mb-1 flex items-center gap-2"><Code2 className="w-4 h-4 text-primary" /> Quick Start</h3>
               <p className="text-sm text-muted-foreground mb-4">Easiest way: redirect customers to your hosted payment link.</p>
               <pre className="bg-muted/50 rounded-lg p-3 text-xs font-mono overflow-x-auto">
-{`<a href="${payLink}">Pay with UPI</a>`}
+{`<a href="${payLink}">Pay with UPI<\/a>`}
               </pre>
               <p className="text-xs text-muted-foreground mt-3 mb-1 font-semibold">Webhook payload</p>
               <pre className="bg-muted/50 rounded-lg p-3 text-xs font-mono overflow-x-auto">
