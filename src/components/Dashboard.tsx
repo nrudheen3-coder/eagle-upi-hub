@@ -661,8 +661,8 @@ export default function Dashboard({ initialMerchant }: DashboardProps) {
               <p className="text-sm text-muted-foreground mb-4">Easiest way: redirect customers to your hosted payment link.</p>
               <pre className="bg-muted/50 rounded-lg p-3 text-xs font-mono overflow-x-auto">
 {`<a href="${payLink}">Pay with UPI<\/a>`}
-              </pre>
-              <p className="text-xs text-muted-foreground mt-3 mb-1 font-semibold">Webhook payload</p>
+              <\/pre>
+              <p className="text-xs text-muted-foreground mt-3 mb-1 font-semibold">Webhook payload<\/p>
               <pre className="bg-muted/50 rounded-lg p-3 text-xs font-mono overflow-x-auto">
 {`POST ${webhookUrl || "https://yoursite.com/webhook"}
 {
@@ -673,9 +673,9 @@ export default function Dashboard({ initialMerchant }: DashboardProps) {
   "source": "GPay",
   "timestamp": "2026-04-18T12:00:00Z"
 }`}
-              </pre>
-            </div>
-          </div>
+              <\/pre>
+            <\/div>
+          <\/div>
         )}
 
         {/* PROFILE - Fix 5,6,9,10,11 */}
