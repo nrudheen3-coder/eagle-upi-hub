@@ -4,7 +4,8 @@ import { api } from "@/lib/api";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { CheckCircle2, IndianRupee, ArrowRight, Loader2, QrCode, Clock, AlertCircle } from "lucide-react";
+import { CheckCircle2, IndianRupee, ArrowRight, Loader2, QrCode, Clock, AlertCircle, Copy, Check } from "lucide-react";
+import { useState as useLocalState } from "react";
 
 interface PaymentGatewayProps {
   merchantId: string;
@@ -27,6 +28,13 @@ export default function PaymentGateway({ merchantId }: PaymentGatewayProps) {
   const [confetti, setConfetti] = useState(false);
 
   const upiLink = `upi://pay?pa=${vpa}&pn=${encodeURIComponent(businessName)}&am=${amount}&cu=INR&tn=Payment-${invoiceId}`;
+  const [copied, setCopied] = useLocalState(false);
+
+  const copyVpa = () => {
+    navigator.clipboard.writeText(vpa);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
 
   // Loading skeleton timer
   useEffect(() => {
@@ -237,7 +245,7 @@ export default function PaymentGateway({ merchantId }: PaymentGatewayProps) {
         </div>
 
         {(step === "pay" || step === "utr") && (
-          <div className="flex items-center justify-center gap-2 mb-4">
+          <div className={`flex items-center justify-center gap-2 mb-4 ${timeLeft < 60 ? "animate-pulse" : ""}`}>
             <Clock className={`w-4 h-4 ${timerColor}`} />
             <span className={`text-sm font-mono font-semibold ${timerColor}`}>
               {formatTime(timeLeft)}
@@ -287,7 +295,12 @@ export default function PaymentGateway({ merchantId }: PaymentGatewayProps) {
               <div className="bg-white rounded-xl p-3 inline-block">
                 <QRCodeSVG value={upiLink} size={180} level="H" />
               </div>
-              <p className="text-xs text-muted-foreground">Scan with any UPI app to pay</p>
+              <div className="flex items-center justify-center gap-2">
+                <p className="text-xs text-muted-foreground font-mono">{vpa}</p>
+                <button onClick={copyVpa} className="text-muted-foreground hover:text-foreground transition-colors">
+                  {copied ? <Check className="w-3 h-3 text-success" /> : <Copy className="w-3 h-3" />}
+                </button>
+              </div>
               <a href={upiLink} className="block">
                 <Button className="w-full gradient-primary text-primary-foreground h-12">
                   <QrCode className="w-4 h-4 mr-2" /> Open UPI App

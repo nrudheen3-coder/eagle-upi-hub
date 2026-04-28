@@ -41,6 +41,7 @@ export default function Dashboard({ initialMerchant }: DashboardProps) {
   const [showNewPw, setShowNewPw] = useState(false);
   const [matchWindow, setMatchWindow] = useState(initialMerchant.matchWindowMinutes ?? 5);
   const [savingWindow, setSavingWindow] = useState(false);
+  const [regenerating, setRegenerating] = useState(false);
   const { toast } = useToast();
 
   const payLink = `${window.location.origin}/pay?m=${merchant.id}`;
@@ -274,12 +275,12 @@ export default function Dashboard({ initialMerchant }: DashboardProps) {
     failed: "Failed",
   }[status]);
 
-  const tabs: { id: Tab; label: string; icon: React.ReactNode }[] = [
-    { id: "overview", label: "Overview", icon: <IndianRupee className="w-4 h-4" /> },
-    { id: "upi", label: "UPI IDs", icon: <Radio className="w-4 h-4" /> },
-    { id: "listeners", label: "Listeners", icon: <Smartphone className="w-4 h-4" /> },
-    { id: "integration", label: "API", icon: <Code2 className="w-4 h-4" /> },
-    { id: "profile", label: "Profile", icon: <User className="w-4 h-4" /> },
+  const tabs: { id: Tab; label: string; shortLabel: string; icon: React.ReactNode }[] = [
+    { id: "overview", label: "Overview", shortLabel: "Home", icon: <IndianRupee className="w-4 h-4" /> },
+    { id: "upi", label: "UPI IDs", shortLabel: "UPI", icon: <Radio className="w-4 h-4" /> },
+    { id: "listeners", label: "Listeners", shortLabel: "App", icon: <Smartphone className="w-4 h-4" /> },
+    { id: "integration", label: "API", shortLabel: "API", icon: <Code2 className="w-4 h-4" /> },
+    { id: "profile", label: "Profile", shortLabel: "Me", icon: <User className="w-4 h-4" /> },
   ];
 
   const activeVpa = merchant.vpaList?.[merchant.activeVpaIndex] ?? merchant.vpaList?.[0] ?? "—";
@@ -308,12 +309,13 @@ export default function Dashboard({ initialMerchant }: DashboardProps) {
             <button
               key={t.id}
               onClick={() => setActiveTab(t.id)}
-              className={`flex-1 min-w-[80px] flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-medium transition-all ${
+              className={`flex-1 min-w-[52px] flex items-center justify-center gap-1.5 py-2.5 rounded-lg text-sm font-medium transition-all ${
                 activeTab === t.id ? "gradient-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"
               }`}
             >
               {t.icon}
               <span className="hidden sm:inline">{t.label}</span>
+              <span className="sm:hidden text-xs">{t.shortLabel}</span>
             </button>
           ))}
         </div>
@@ -345,24 +347,38 @@ export default function Dashboard({ initialMerchant }: DashboardProps) {
                 </Button>
               </div>
             )}
+            {/* Fix 10: Stats skeleton while loading */}
+            {!stats ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 animate-pulse">
+                <div className="glass rounded-2xl p-6 space-y-3">
+                  <div className="h-3 bg-muted rounded w-1/2" />
+                  <div className="h-10 bg-muted rounded w-2/3" />
+                </div>
+                <div className="glass rounded-2xl p-6 space-y-3">
+                  <div className="h-3 bg-muted rounded w-1/2" />
+                  <div className="h-10 bg-muted rounded w-1/3" />
+                </div>
+              </div>
+            ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="glass rounded-2xl p-6 glow-primary">
                 <div className="flex items-center gap-2 text-muted-foreground text-sm mb-2">
                   <IndianRupee className="w-4 h-4" /> Collected Today
                 </div>
                 <p className="text-3xl md:text-4xl font-bold text-gradient">
-                  ₹{stats?.todayTotal?.toLocaleString("en-IN") ?? "—"}
+                  ₹{stats.todayTotal?.toLocaleString("en-IN") ?? "0"}
                 </p>
               </div>
               <div className="glass rounded-2xl p-6">
                 <div className="flex items-center gap-2 text-muted-foreground text-sm mb-2">
                   <ArrowRightLeft className="w-4 h-4" /> Total Transactions
                 </div>
-                <p className="text-3xl md:text-4xl font-bold">{stats?.totalTransactions ?? "—"}</p>
+                <p className="text-3xl md:text-4xl font-bold">{stats.totalTransactions ?? 0}</p>
               </div>
             </div>
+            )}
 
-            {/* Fix 8: Revenue Chart */}
+        {/* Fix 8: Revenue Chart */}
             {stats && stats.weeklyRevenue && (
               <div className="glass rounded-2xl p-5">
                 <div className="flex items-center justify-between mb-4">
@@ -461,7 +477,7 @@ export default function Dashboard({ initialMerchant }: DashboardProps) {
               <div className="flex items-center justify-between mb-2">
                 <p className="text-sm text-muted-foreground flex items-center gap-2"><Key className="w-4 h-4" /> API Key</p>
                 <Button size="sm" variant="ghost" onClick={handleRegenKey}>
-                  <RefreshCw className="w-3 h-3 mr-1" /> Regenerate
+                  {regenerating ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : <RefreshCw className="w-3 h-3 mr-1" />} Regenerate
                 </Button>
               </div>
               <div className="flex items-center gap-2">

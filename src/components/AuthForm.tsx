@@ -12,6 +12,19 @@ interface AuthFormProps {
   onBack: () => void;
 }
 
+function getPasswordStrength(pw: string): { score: number; label: string; color: string } {
+  if (!pw) return { score: 0, label: "", color: "" };
+  let score = 0;
+  if (pw.length >= 8) score++;
+  if (pw.length >= 12) score++;
+  if (/[A-Z]/.test(pw)) score++;
+  if (/[0-9]/.test(pw)) score++;
+  if (/[^A-Za-z0-9]/.test(pw)) score++;
+  if (score <= 1) return { score, label: "Weak", color: "bg-destructive" };
+  if (score <= 3) return { score, label: "Fair", color: "bg-warning" };
+  return { score, label: "Strong", color: "bg-success" };
+}
+
 export default function AuthForm({ mode, onBack }: AuthFormProps) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -31,6 +44,7 @@ export default function AuthForm({ mode, onBack }: AuthFormProps) {
         await api.login(email, password);
       } else if (currentMode === "register") {
         await api.register({ email, password, businessName, vpa });
+        // Fix 1 & 3: show confirmation message instead of trying to load profile
         setRegistered(true);
       } else if (currentMode === "forgot") {
         const { error } = await supabase.auth.resetPasswordForEmail(email, {
@@ -46,6 +60,7 @@ export default function AuthForm({ mode, onBack }: AuthFormProps) {
     }
   };
 
+  // Fix 1 & 3: show email confirmation screen after register
   if (registered) {
     return (
       <div className="min-h-screen flex items-center justify-center px-4">
@@ -56,7 +71,9 @@ export default function AuthForm({ mode, onBack }: AuthFormProps) {
           <h2 className="text-2xl font-bold mb-2">Check your email!</h2>
           <p className="text-muted-foreground mb-2">We sent a confirmation link to</p>
           <p className="font-semibold mb-6">{email}</p>
-          <p className="text-sm text-muted-foreground mb-6">Click the link to confirm your account then come back and login.</p>
+          <p className="text-sm text-muted-foreground mb-6">
+            Click the link in the email to confirm your account. Once confirmed, come back and login.
+          </p>
           <Button className="w-full gradient-primary text-primary-foreground" onClick={() => setCurrentMode("login")}>
             Go to Login
           </Button>
@@ -65,6 +82,7 @@ export default function AuthForm({ mode, onBack }: AuthFormProps) {
     );
   }
 
+  // Fix 2: show forgot password sent screen
   if (forgotSent) {
     return (
       <div className="min-h-screen flex items-center justify-center px-4">
@@ -112,6 +130,21 @@ export default function AuthForm({ mode, onBack }: AuthFormProps) {
               <div>
                 <Label>Password</Label>
                 <Input type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="••••••••" required minLength={6} />
+                {currentMode === "register" && password.length > 0 && (() => {
+                  const s = getPasswordStrength(password);
+                  return (
+                    <div className="mt-2 space-y-1">
+                      <div className="flex gap-1">
+                        {Array.from({ length: 5 }).map((_, i) => (
+                          <div key={i} className={`h-1 flex-1 rounded-full transition-all ${i < s.score ? s.color : "bg-muted"}`} />
+                        ))}
+                      </div>
+                      <p className={`text-xs ${s.score <= 1 ? "text-destructive" : s.score <= 3 ? "text-warning" : "text-success"}`}>
+                        {s.label}
+                      </p>
+                    </div>
+                  );
+                })()}
               </div>
             )}
             {currentMode === "register" && (
@@ -131,25 +164,39 @@ export default function AuthForm({ mode, onBack }: AuthFormProps) {
               {currentMode === "login" ? "Sign In" : currentMode === "register" ? "Create Account" : "Send Reset Link"}
             </Button>
           </form>
+
+          {/* Fix 2: forgot password link */}
           {currentMode === "login" && (
             <div className="mt-4 text-center space-y-2">
-              <button className="text-xs text-muted-foreground hover:text-foreground" onClick={() => setCurrentMode("forgot")}>
+              <button
+                className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+                onClick={() => setCurrentMode("forgot")}
+              >
                 Forgot password?
               </button>
               <p className="text-xs text-muted-foreground">
                 No account?{" "}
-                <button className="text-primary hover:underline" onClick={() => setCurrentMode("register")}>Register</button>
+                <button className="text-primary hover:underline" onClick={() => setCurrentMode("register")}>
+                  Register
+                </button>
               </p>
             </div>
           )}
+
           {currentMode === "register" && (
             <p className="mt-4 text-xs text-muted-foreground text-center">
               Already have an account?{" "}
-              <button className="text-primary hover:underline" onClick={() => setCurrentMode("login")}>Sign in</button>
+              <button className="text-primary hover:underline" onClick={() => setCurrentMode("login")}>
+                Sign in
+              </button>
             </p>
           )}
+
           {currentMode === "forgot" && (
-            <button className="mt-4 w-full text-xs text-muted-foreground" onClick={() => setCurrentMode("login")}>
+            <button
+              className="mt-4 w-full text-xs text-muted-foreground hover:text-foreground transition-colors"
+              onClick={() => setCurrentMode("login")}
+            >
               ← Back to login
             </button>
           )}

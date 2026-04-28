@@ -1,10 +1,10 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import AuthForm from "./AuthForm";
 import {
   QrCode, Smartphone, CheckCircle2, Webhook, ArrowRight, Shield, Zap,
   Code2, Download, ChevronDown, ChevronUp, MessageCircle, Mail,
-  IndianRupee, Clock, Wifi, Star, Users, TrendingUp,
+  IndianRupee, Clock, Wifi, Star, Users, TrendingUp, Menu, X,
 } from "lucide-react";
 
 // Fix 1: point to GitHub release instead of Supabase storage
@@ -112,6 +112,14 @@ const upiLink = \`upi://pay?pa=\${vpa}&am=499&tn=\${invoice_id}\`;
 export default function LandingPage() {
   const [authMode, setAuthMode] = useState<"login" | "register" | null>(null);
   const [openFaq, setOpenFaq] = useState<number | null>(null);
+  const [showScrollTop, setShowScrollTop] = useState(false);
+  const [mobileMenu, setMobileMenu] = useState(false);
+
+  useEffect(() => {
+    const onScroll = () => setShowScrollTop(window.scrollY > 400);
+    window.addEventListener("scroll", onScroll);
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
 
   if (authMode) {
     return <AuthForm mode={authMode} onBack={() => setAuthMode(null)} />;
@@ -134,10 +142,27 @@ export default function LandingPage() {
               <Download className="w-4 h-4 mr-1.5" /> Auto-Verify APK
             </a>
           </Button>
-          <Button variant="ghost" size="sm" onClick={() => setAuthMode("login")}>Login</Button>
-          <Button size="sm" onClick={() => setAuthMode("register")}>Get Started</Button>
+          <Button variant="ghost" size="sm" onClick={() => setAuthMode("login")} className="hidden sm:inline-flex">Login</Button>
+          <Button size="sm" onClick={() => setAuthMode("register")} className="hidden sm:inline-flex">Get Started</Button>
+          {/* Mobile hamburger */}
+          <button className="sm:hidden p-2 text-muted-foreground" onClick={() => setMobileMenu(!mobileMenu)}>
+            {mobileMenu ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+          </button>
         </div>
       </nav>
+
+      {/* Mobile menu */}
+      {mobileMenu && (
+        <div className="sm:hidden glass border-b border-border/30 px-6 py-4 space-y-3 animate-float-in">
+          <Button variant="ghost" className="w-full justify-start" onClick={() => { setAuthMode("login"); setMobileMenu(false); }}>Login</Button>
+          <Button className="w-full gradient-primary text-primary-foreground" onClick={() => { setAuthMode("register"); setMobileMenu(false); }}>Get Started</Button>
+          <Button variant="outline" className="w-full" asChild>
+            <a href={APK_URL} download onClick={() => setMobileMenu(false)}>
+              <Download className="w-4 h-4 mr-2" /> Download APK
+            </a>
+          </Button>
+        </div>
+      )}
 
       {/* Hero */}
       <section className="flex-1 flex flex-col items-center justify-center text-center px-6 py-16 md:py-24">
@@ -373,6 +398,17 @@ export default function LandingPage() {
           </Button>
         </div>
       </section>
+
+      {/* Fix 1: Scroll to top button */}
+      {showScrollTop && (
+        <button
+          className="fixed bottom-6 right-6 z-50 w-10 h-10 rounded-full gradient-primary text-primary-foreground flex items-center justify-center shadow-lg glow-primary transition-all animate-float-in"
+          onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
+          aria-label="Scroll to top"
+        >
+          ↑
+        </button>
+      )}
 
       {/* Footer */}
       <footer className="px-6 py-8 border-t border-border/30">
