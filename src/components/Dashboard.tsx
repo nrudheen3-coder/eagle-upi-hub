@@ -426,10 +426,10 @@ export default function Dashboard({ initialMerchant }: DashboardProps) {
                       <div className={`w-5 h-5 rounded-full flex items-center justify-center shrink-0 ${step.done ? "bg-success/20" : "bg-muted"}`}>
                         {step.done
                           ? <CheckCircle2 className="w-3 h-3 text-success" />
-                          : <span className="text-xs text-muted-foreground">{i + 1}<\/span>
+                          : <span className="text-xs text-muted-foreground">{i + 1}</span>
                         }
-                      <\/div>
-                      <p className={`text-sm flex-1 ${step.done ? "line-through text-muted-foreground" : ""}`}>{step.label}<\/p>
+                      </div>
+                      <p className={`text-sm flex-1 ${step.done ? "line-through text-muted-foreground" : ""}`}>{step.label}</p>
                       {!step.done && step.tab && (
                         <button className="text-xs text-primary hover:underline" onClick={() => setActiveTab(step.tab as any)}>
                           {step.action}
@@ -660,9 +660,9 @@ export default function Dashboard({ initialMerchant }: DashboardProps) {
               <h3 className="font-semibold mb-1 flex items-center gap-2"><Code2 className="w-4 h-4 text-primary" /> Quick Start</h3>
               <p className="text-sm text-muted-foreground mb-4">Easiest way: redirect customers to your hosted payment link.</p>
               <pre className="bg-muted/50 rounded-lg p-3 text-xs font-mono overflow-x-auto">
-{`<a href="${payLink}">Pay with UPI<\/a>`}
-              <\/pre>
-              <p className="text-xs text-muted-foreground mt-3 mb-1 font-semibold">Webhook payload<\/p>
+{`<a href="${payLink}">Pay with UPI</a>`}
+              </pre>
+              <p className="text-xs text-muted-foreground mt-3 mb-1 font-semibold">Webhook payload</p>
               <pre className="bg-muted/50 rounded-lg p-3 text-xs font-mono overflow-x-auto">
 {`POST ${webhookUrl || "https://yoursite.com/webhook"}
 {
