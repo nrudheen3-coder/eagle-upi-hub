@@ -426,10 +426,10 @@ export default function Dashboard({ initialMerchant }: DashboardProps) {
                       <div className={`w-5 h-5 rounded-full flex items-center justify-center shrink-0 ${step.done ? "bg-success/20" : "bg-muted"}`}>
                         {step.done
                           ? <CheckCircle2 className="w-3 h-3 text-success" />
-                          : <span className="text-xs text-muted-foreground">{i + 1}</span>
+                          : <span className="text-xs text-muted-foreground">{i + 1}<\/span>
                         }
-                      </div>
-                      <p className={`text-sm flex-1 ${step.done ? "line-through text-muted-foreground" : ""}`}>{step.label}</p>
+                      <\/div>
+                      <p className={`text-sm flex-1 ${step.done ? "line-through text-muted-foreground" : ""}`}>{step.label}<\/p>
                       {!step.done && step.tab && (
                         <button className="text-xs text-primary hover:underline" onClick={() => setActiveTab(step.tab as any)}>
                           {step.action}
@@ -673,9 +673,9 @@ export default function Dashboard({ initialMerchant }: DashboardProps) {
   "source": "GPay",
   "timestamp": "2026-04-18T12:00:00Z"
 }`}
-              <\/pre>
-            <\/div>
-          <\/div>
+              </pre>
+            </div>
+          </div>
         )}
 
         {/* PROFILE - Fix 5,6,9,10,11 */}
