@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#0B0B12"/>
+      <stop offset="100%" style="stop-color:#15151F"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#6366F1"/>
+      <stop offset="100%" style="stop-color:#8B5CF6"/>
+    </linearGradient>
+  </defs>
+  <!-- Background -->
+  <rect width="1200" height="630" fill="url(#bg)"/>
+  <!-- Glow circle -->
+  <circle cx="600" cy="315" r="280" fill="#6366F1" opacity="0.06"/>
+  <!-- Logo box -->
+  <rect x="520" y="160" width="80" height="80" rx="20" fill="url(#accent)"/>
+  <text x="560" y="218" font-family="Arial" font-weight="bold" font-size="48" fill="white" text-anchor="middle">E</text>
+  <!-- Title -->
+  <text x="600" y="320" font-family="Arial" font-weight="bold" font-size="64" fill="white" text-anchor="middle">Eagle Pay</text>
+  <!-- Subtitle -->
+  <text x="600" y="380" font-family="Arial" font-size="28" fill="#9CA3AF" text-anchor="middle">UPI Payment Gateway at 0% Fee</text>
+  <!-- Stats row -->
+  <text x="280" y="480" font-family="Arial" font-weight="bold" font-size="32" fill="#6366F1" text-anchor="middle">17+</text>
+  <text x="280" y="510" font-family="Arial" font-size="18" fill="#9CA3AF" text-anchor="middle">UPI Apps</text>
+  <text x="480" y="480" font-family="Arial" font-weight="bold" font-size="32" fill="#22C55E" text-anchor="middle">0%</text>
+  <text x="480" y="510" font-family="Arial" font-size="18" fill="#9CA3AF" text-anchor="middle">Transaction Fee</text>
+  <text x="720" y="480" font-family="Arial" font-weight="bold" font-size="32" fill="#6366F1" text-anchor="middle">&lt;3s</text>
+  <text x="720" y="510" font-family="Arial" font-size="18" fill="#9CA3AF" text-anchor="middle">Detection</text>
+  <text x="920" y="480" font-family="Arial" font-weight="bold" font-size="32" fill="#22C55E" text-anchor="middle">Direct</text>
+  <text x="920" y="510" font-family="Arial" font-size="18" fill="#9CA3AF" text-anchor="middle">To Your Bank</text>
+</svg>

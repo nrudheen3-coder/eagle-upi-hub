@@ -24,7 +24,7 @@ const features = [
   { icon: QrCode, title: "Multi-VPA Rotation", desc: "Add multiple UPI IDs. Auto-rotate to avoid daily limits." },
 ];
 
-const stats = [
+const staticStats = [
   { icon: Smartphone, value: "17+", label: "UPI Apps Supported" },
   { icon: Clock, value: "< 3s", label: "Detection Speed" },
   { icon: Wifi, value: "99.9%", label: "Uptime" },
@@ -114,6 +114,26 @@ export default function LandingPage() {
   const [openFaq, setOpenFaq] = useState<number | null>(null);
   const [showScrollTop, setShowScrollTop] = useState(false);
   const [mobileMenu, setMobileMenu] = useState(false);
+  const [liveStats, setLiveStats] = useState({ merchants: 0, transactions: 0 });
+
+  useEffect(() => {
+    // Fetch live stats from Supabase
+    const fetchStats = async () => {
+      try {
+        const { createClient } = await import("@supabase/supabase-js");
+        const client = createClient(
+          import.meta.env.VITE_SUPABASE_URL,
+          import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY
+        );
+        const [{ count: merchants }, { count: transactions }] = await Promise.all([
+          client.from("merchants").select("*", { count: "exact", head: true }),
+          client.from("transactions").select("*", { count: "exact", head: true }).eq("status", "verified"),
+        ]);
+        setLiveStats({ merchants: merchants ?? 0, transactions: transactions ?? 0 });
+      } catch {}
+    };
+    fetchStats();
+  }, []);
 
   useEffect(() => {
     const onScroll = () => setShowScrollTop(window.scrollY > 400);
@@ -201,13 +221,21 @@ export default function LandingPage() {
       {/* Stats */}
       <section className="px-6 py-12 border-t border-border/30">
         <div className="max-w-4xl mx-auto grid grid-cols-2 md:grid-cols-4 gap-6">
-          {stats.map((s, i) => (
+          {staticStats.map((s, i) => (
             <div key={i} className="glass rounded-xl p-5 text-center animate-float-in" style={{ animationDelay: `${i * 0.1}s` }}>
               <s.icon className="w-6 h-6 text-primary mx-auto mb-2" />
               <p className="text-2xl font-extrabold text-gradient">{s.value}</p>
               <p className="text-xs text-muted-foreground mt-1">{s.label}</p>
             </div>
           ))}
+          {/* Phase 3: Live dynamic stats */}
+          {liveStats.merchants > 0 && (
+            <div className="glass rounded-xl p-5 text-center animate-float-in col-span-2 md:col-span-4">
+              <Users className="w-6 h-6 text-primary mx-auto mb-2" />
+              <p className="text-2xl font-extrabold text-gradient">{liveStats.merchants}+ merchants · {liveStats.transactions.toLocaleString("en-IN")}+ payments verified</p>
+              <p className="text-xs text-muted-foreground mt-1">Live on Eagle Pay</p>
+            </div>
+          )}
         </div>
       </section>
 
