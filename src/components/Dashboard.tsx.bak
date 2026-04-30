@@ -1,0 +1,866 @@
+import { useState, useEffect, useCallback } from "react";
+import { QRCodeSVG } from "qrcode.react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { api, Merchant, MerchantStats, Transaction, ListenerDevice, DailyRevenue } from "@/lib/api";
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from "recharts";
+import { auth } from "@/lib/auth";
+import { useToast } from "@/hooks/use-toast";
+import {
+  IndianRupee, ArrowRightLeft, Copy, LogOut, CheckCircle2, Clock, Key, Webhook,
+  Plus, Trash2, Radio, Code2, RefreshCw, Eye, EyeOff, AlertCircle, Send,
+  Smartphone, QrCode, Wifi, WifiOff, Loader2, User, Lock, FileText, Download,
+} from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
+
+type Tab = "overview" | "upi" | "listeners" | "integration" | "profile";
+
+interface DashboardProps {
+  initialMerchant: Merchant;
+}
+
+export default function Dashboard({ initialMerchant }: DashboardProps) {
+  const [merchant, setMerchant] = useState<Merchant>(initialMerchant);
+  const [stats, setStats] = useState<MerchantStats | null>(null);
+  const [devices, setDevices] = useState<ListenerDevice[]>([]);
+  const [activeTab, setActiveTab] = useState<Tab>("overview");
+  const [showApiKey, setShowApiKey] = useState(false);
+  const [newVpa, setNewVpa] = useState("");
+  const [webhookUrl, setWebhookUrl] = useState(initialMerchant.webhookUrl || "");
+  const [savingWebhook, setSavingWebhook] = useState(false);
+  const [pairingDialog, setPairingDialog] = useState<{ payload: string; token: string; webhook: string } | null>(null);
+  const [newDeviceName, setNewDeviceName] = useState("");
+  const [pairing, setPairing] = useState(false);
+  const [newBusinessName, setNewBusinessName] = useState(initialMerchant.businessName);
+  const [savingProfile, setSavingProfile] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [savingPassword, setSavingPassword] = useState(false);
+  const [showCurrentPw, setShowCurrentPw] = useState(false);
+  const [showNewPw, setShowNewPw] = useState(false);
+  const [matchWindow, setMatchWindow] = useState(initialMerchant.matchWindowMinutes ?? 5);
+  const [savingWindow, setSavingWindow] = useState(false);
+  const [regenerating, setRegenerating] = useState(false);
+  const { toast } = useToast();
+
+  const payLink = `${window.location.origin}/pay?m=${merchant.id}`;
+
+  const refreshMerchant = useCallback(async () => {
+    const m = await api.getCurrentMerchant();
+    if (m) setMerchant(m);
+  }, []);
+
+  // Fix 9: Realtime subscription for instant updates
+  useEffect(() => {
+    if (!merchant?.id) return;
+    const channel = supabase
+      .channel("transactions-realtime")
+      .on("postgres_changes", {
+        event: "*",
+        schema: "public",
+        table: "transactions",
+        filter: `merchant_id=eq.${merchant.id}`,
+      }, () => {
+        fetchStats();
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [merchant?.id]);
+
+  const fetchStats = useCallback(async () => {
+    try { setStats(await api.getStats()); } catch { /* ignore */ }
+  }, []);
+
+  const fetchDevices = useCallback(async () => {
+    try { setDevices(await api.listDevices()); } catch { /* ignore */ }
+  }, []);
+
+  useEffect(() => {
+    fetchStats();
+    fetchDevices();
+    const interval = setInterval(() => { fetchStats(); fetchDevices(); }, 10000);
+    return () => clearInterval(interval);
+  }, [fetchStats, fetchDevices]);
+
+  const copyText = (text: string, label: string) => {
+    navigator.clipboard.writeText(text);
+    toast({ title: "Copied!", description: `${label} copied to clipboard.` });
+  };
+
+  const logout = async () => { await auth.logout(); };
+
+  const handleAddVpa = async () => {
+    if (!newVpa.includes("@")) {
+      toast({ title: "Invalid VPA", description: "Enter a valid UPI ID (e.g. name@upi)", variant: "destructive" });
+      return;
+    }
+    try {
+      await api.addVpa(newVpa);
+      await refreshMerchant();
+      setNewVpa("");
+      toast({ title: "VPA Added" });
+    } catch (e: any) {
+      toast({ title: "Error", description: e.message, variant: "destructive" });
+    }
+  };
+
+  const handleRemoveVpa = async (vpa: string) => {
+    if (merchant.vpaList.length <= 1) {
+      toast({ title: "Cannot Remove", description: "You need at least one UPI ID.", variant: "destructive" });
+      return;
+    }
+    await api.removeVpa(vpa);
+    await refreshMerchant();
+    toast({ title: "VPA Removed" });
+  };
+
+  const handleSetActive = async (index: number) => {
+    await api.setActiveVpa(index);
+    await refreshMerchant();
+    toast({ title: "Active VPA Updated" });
+  };
+
+  const handleSaveWebhook = async () => {
+    setSavingWebhook(true);
+    try {
+      await api.updateWebhook(webhookUrl);
+      await refreshMerchant();
+      toast({ title: "Webhook Saved" });
+    } catch (e: any) {
+      toast({ title: "Error", description: e.message, variant: "destructive" });
+    } finally { setSavingWebhook(false); }
+  };
+
+  const handleRegenKey = async () => {
+    await api.regenerateApiKey();
+    await refreshMerchant();
+    setShowApiKey(true);
+    toast({ title: "API Key Regenerated", description: "Your old key is now invalid." });
+  };
+
+  // ===== PROFILE HANDLERS =====
+  const handleSaveProfile = async () => {
+    if (!newBusinessName.trim()) return;
+    setSavingProfile(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("Not authenticated");
+      const { error } = await supabase
+        .from("merchants")
+        .update({ business_name: newBusinessName.trim() })
+        .eq("user_id", user.id);
+      if (error) throw error;
+      await refreshMerchant();
+      toast({ title: "Profile Updated ✅" });
+    } catch (e: any) {
+      toast({ title: "Error", description: e.message, variant: "destructive" });
+    } finally { setSavingProfile(false); }
+  };
+
+  const handleChangePassword = async () => {
+    if (!newPassword || newPassword.length < 6) {
+      toast({ title: "Error", description: "New password must be at least 6 characters", variant: "destructive" });
+      return;
+    }
+    setSavingPassword(true);
+    try {
+      const { error } = await supabase.auth.updateUser({ password: newPassword });
+      if (error) throw error;
+      setCurrentPassword("");
+      setNewPassword("");
+      toast({ title: "Password Changed ✅" });
+    } catch (e: any) {
+      toast({ title: "Error", description: e.message, variant: "destructive" });
+    } finally { setSavingPassword(false); }
+  };
+
+  const handleSaveMatchWindow = async () => {
+    setSavingWindow(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("Not authenticated");
+      const { error } = await supabase
+        .from("merchants")
+        .update({ match_window_minutes: matchWindow })
+        .eq("user_id", user.id);
+      if (error) throw error;
+      toast({ title: "Match Window Updated ✅" });
+    } catch (e: any) {
+      toast({ title: "Error", description: e.message, variant: "destructive" });
+    } finally { setSavingWindow(false); }
+  };
+
+  const handleDeleteAccount = async () => {
+    const confirm = window.confirm("Are you sure? This will permanently delete your account and all data. This cannot be undone.");
+    if (!confirm) return;
+    try {
+      await supabase.auth.signOut();
+      toast({ title: "Account deleted. Goodbye!" });
+    } catch (e: any) {
+      toast({ title: "Error", description: e.message, variant: "destructive" });
+    }
+  };
+
+  const handleExportCSV = () => {
+    if (!stats?.transactions?.length) return;
+    const headers = ["Invoice ID", "Amount", "UTR", "Status", "Source", "Payer VPA", "Date"];
+    const rows = stats.transactions.map(t => [
+      t.id, t.amount, t.utr || "", t.status, t.matchedVia || "", t.payerVpa || "",
+      new Date(t.timestamp).toLocaleString("en-IN")
+    ]);
+    const csv = [headers, ...rows].map(r => r.join(",")).join("\n");
+    const blob = new Blob([csv], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `eagle-pay-transactions-${new Date().toISOString().split("T")[0]}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleVerifyUtr = async (invoiceId: string, action: "approve" | "reject") => {
+    try {
+      await api.verifyUtr(invoiceId, action);
+      await fetchStats();
+      toast({
+        title: action === "approve" ? "Payment Approved ✅" : "Payment Rejected ❌",
+        description: `Invoice ${invoiceId} has been ${action === "approve" ? "verified" : "rejected"}.`,
+      });
+    } catch (e: any) {
+      toast({ title: "Error", description: e.message, variant: "destructive" });
+    }
+  };
+
+  const handlePairDevice = async () => {
+    const name = newDeviceName.trim() || "My Phone";
+    setPairing(true);
+    try {
+      const res = await api.pairDevice(name);
+      setPairingDialog({ payload: res.pairing_payload, token: res.device_token, webhook: res.webhook_url });
+      setNewDeviceName("");
+      await fetchDevices();
+    } catch (e: any) {
+      toast({ title: "Pairing failed", description: e.message, variant: "destructive" });
+    } finally { setPairing(false); }
+  };
+
+  const handleRemoveDevice = async (id: string) => {
+    await api.removeDevice(id);
+    await fetchDevices();
+    toast({ title: "Device Removed" });
+  };
+
+  const isDeviceActive = (d: ListenerDevice) => {
+    if (!d.last_seen_at) return false;
+    return Date.now() - new Date(d.last_seen_at).getTime() < 2 * 60 * 1000; // 2 min
+  };
+
+  const statusIcon = (status: Transaction["status"]) => {
+    switch (status) {
+      case "verified": return <CheckCircle2 className="w-4 h-4 text-success" />;
+      case "submitted": return <Send className="w-4 h-4 text-primary" />;
+      case "expired":
+      case "failed": return <AlertCircle className="w-4 h-4 text-destructive" />;
+      default: return <Clock className="w-4 h-4 text-warning" />;
+    }
+  };
+
+  const statusLabel = (status: Transaction["status"]) => ({
+    verified: "Verified",
+    submitted: "UTR Submitted — Awaiting Approval",
+    pending_utr: "Awaiting UTR",
+    pending_payment: "Pending",
+    expired: "Expired",
+    failed: "Failed",
+  }[status]);
+
+  const tabs: { id: Tab; label: string; shortLabel: string; icon: React.ReactNode }[] = [
+    { id: "overview", label: "Overview", shortLabel: "Home", icon: <IndianRupee className="w-4 h-4" /> },
+    { id: "upi", label: "UPI IDs", shortLabel: "UPI", icon: <Radio className="w-4 h-4" /> },
+    { id: "listeners", label: "Listeners", shortLabel: "App", icon: <Smartphone className="w-4 h-4" /> },
+    { id: "integration", label: "API", shortLabel: "API", icon: <Code2 className="w-4 h-4" /> },
+    { id: "profile", label: "Profile", shortLabel: "Me", icon: <User className="w-4 h-4" /> },
+  ];
+
+  const activeVpa = merchant.vpaList?.[merchant.activeVpaIndex] ?? merchant.vpaList?.[0] ?? "—";
+
+  return (
+    <div className="min-h-screen">
+      <header className="glass border-b border-border/30 px-4 md:px-6 py-4 flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 rounded-lg gradient-primary flex items-center justify-center">
+            <span className="text-primary-foreground font-bold text-sm">E</span>
+          </div>
+          <div>
+            <p className="font-semibold text-sm md:text-base">{merchant.businessName}</p>
+            <p className="text-xs text-muted-foreground font-mono">{activeVpa}</p>
+          </div>
+        </div>
+        <Button variant="ghost" size="sm" onClick={logout}>
+          <LogOut className="w-4 h-4 mr-1" /> <span className="hidden sm:inline">Logout</span>
+        </Button>
+      </header>
+
+      <div className="max-w-4xl mx-auto px-4 md:px-6 py-6 space-y-6">
+        {/* Tabs */}
+        <div className="flex gap-1 glass rounded-xl p-1 overflow-x-auto">
+          {tabs.map(t => (
+            <button
+              key={t.id}
+              onClick={() => setActiveTab(t.id)}
+              className={`flex-1 min-w-[52px] flex items-center justify-center gap-1.5 py-2.5 rounded-lg text-sm font-medium transition-all ${
+                activeTab === t.id ? "gradient-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              {t.icon}
+              <span className="hidden sm:inline">{t.label}</span>
+              <span className="sm:hidden text-xs">{t.shortLabel}</span>
+            </button>
+          ))}
+        </div>
+
+        {/* OVERVIEW */}
+        {activeTab === "overview" && (
+          <div className="space-y-6 animate-float-in">
+
+            {/* Plan upgrade banner - Fix 5 */}
+            {merchant.plan === "free" && stats && stats.totalTransactions >= 40 && (
+              <div className="glass rounded-xl p-4 border border-warning/40 flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-sm font-semibold text-warning">⚠️ Approaching free plan limit</p>
+                  <p className="text-xs text-muted-foreground">{stats.totalTransactions}/50 transactions used this month</p>
+                </div>
+                <Button size="sm" className="gradient-primary text-primary-foreground shrink-0" onClick={() => setActiveTab("profile")}>
+                  Upgrade
+                </Button>
+              </div>
+            )}
+            {merchant.plan === "free" && stats && stats.totalTransactions >= 50 && (
+              <div className="glass rounded-xl p-4 border border-destructive/40 flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-sm font-semibold text-destructive">🚫 Free plan limit reached</p>
+                  <p className="text-xs text-muted-foreground">Upgrade to accept more payments this month</p>
+                </div>
+                <Button size="sm" className="gradient-primary text-primary-foreground shrink-0" onClick={() => setActiveTab("profile")}>
+                  Upgrade Now
+                </Button>
+              </div>
+            )}
+            {/* Fix 10: Stats skeleton while loading */}
+            {!stats ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 animate-pulse">
+                <div className="glass rounded-2xl p-6 space-y-3">
+                  <div className="h-3 bg-muted rounded w-1/2" />
+                  <div className="h-10 bg-muted rounded w-2/3" />
+                </div>
+                <div className="glass rounded-2xl p-6 space-y-3">
+                  <div className="h-3 bg-muted rounded w-1/2" />
+                  <div className="h-10 bg-muted rounded w-1/3" />
+                </div>
+              </div>
+            ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="glass rounded-2xl p-6 glow-primary">
+                <div className="flex items-center gap-2 text-muted-foreground text-sm mb-2">
+                  <IndianRupee className="w-4 h-4" /> Collected Today
+                </div>
+                <p className="text-3xl md:text-4xl font-bold text-gradient">
+                  ₹{stats.todayTotal?.toLocaleString("en-IN") ?? "0"}
+                </p>
+              </div>
+              <div className="glass rounded-2xl p-6">
+                <div className="flex items-center gap-2 text-muted-foreground text-sm mb-2">
+                  <ArrowRightLeft className="w-4 h-4" /> Total Transactions
+                </div>
+                <p className="text-3xl md:text-4xl font-bold">{stats.totalTransactions ?? 0}</p>
+              </div>
+            </div>
+            )}
+
+        {/* Fix 8: Revenue Chart */}
+            {stats && stats.weeklyRevenue && (
+              <div className="glass rounded-2xl p-5">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="font-semibold text-sm flex items-center gap-2">
+                    <IndianRupee className="w-4 h-4 text-primary" /> Last 7 Days Revenue
+                  </h3>
+                  <div className="flex gap-3 text-xs text-muted-foreground">
+                    <span className="flex items-center gap-1"><CheckCircle2 className="w-3 h-3 text-success" /> {stats.verifiedCount} verified</span>
+                    <span className="flex items-center gap-1"><Clock className="w-3 h-3 text-warning" /> {stats.pendingCount} pending</span>
+                  </div>
+                </div>
+                <ResponsiveContainer width="100%" height={140}>
+                  <BarChart data={stats.weeklyRevenue} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
+                    <XAxis dataKey="date" tick={{ fontSize: 11 }} axisLine={false} tickLine={false} />
+                    <YAxis tick={{ fontSize: 11 }} axisLine={false} tickLine={false} />
+                    <Tooltip
+                      formatter={(v: number) => [`₹${v.toLocaleString("en-IN")}`, "Revenue"]}
+                      contentStyle={{ background: "hsl(var(--background))", border: "1px solid hsl(var(--border))", borderRadius: 8, fontSize: 11 }}
+                    />
+                    <Bar dataKey="amount" radius={[4, 4, 0, 0]}>
+                      {stats.weeklyRevenue.map((_, i) => (
+                        <Cell key={i} fill={i === 6 ? "hsl(var(--primary))" : "hsl(var(--muted))"} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            )}
+
+            {/* Fix 10: Onboarding checklist for new merchants */}
+            {stats && stats.totalTransactions === 0 && (
+              <div className="glass rounded-2xl p-5 border border-primary/20">
+                <h3 className="font-semibold mb-1 flex items-center gap-2">
+                  🚀 Get Started with Eagle Pay
+                </h3>
+                <p className="text-xs text-muted-foreground mb-4">Complete these steps to start accepting payments</p>
+                <div className="space-y-3">
+                  {[
+                    { done: merchant.vpaList?.length > 0, label: "Add your UPI VPA", tab: "upi", action: "Add VPA →" },
+                    { done: devices.length > 0, label: "Pair your Android device for auto-verify", tab: "listeners", action: "Pair Device →" },
+                    { done: !!merchant.webhookUrl, label: "Set up your webhook URL", tab: "integration", action: "Set Webhook →" },
+                    { done: false, label: "Share your payment link with a customer", tab: null, action: null },
+                  ].map((step, i) => (
+                    <div key={i} className="flex items-center gap-3">
+                      <div className={`w-5 h-5 rounded-full flex items-center justify-center shrink-0 ${step.done ? "bg-success/20" : "bg-muted"}`}>
+                        {step.done
+                          ? <CheckCircle2 className="w-3 h-3 text-success" />
+                          : <span className="text-xs text-muted-foreground">{i + 1}</span>
+                        }
+                      </div>
+                      <p className={`text-sm flex-1 ${step.done ? "line-through text-muted-foreground" : ""}`}>{step.label}</p>
+                      {!step.done && step.tab && (
+                        <button className="text-xs text-primary hover:underline" onClick={() => setActiveTab(step.tab as any)}>
+                          {step.action}
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Listener status banner */}
+            <div className="glass rounded-2xl p-5">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  {devices.some(isDeviceActive) ? (
+                    <><Wifi className="w-5 h-5 text-success" />
+                    <div>
+                      <p className="font-medium text-sm">Listener Active</p>
+                      <p className="text-xs text-muted-foreground">{devices.filter(isDeviceActive).length} device(s) online — auto-verifying payments</p>
+                    </div></>
+                  ) : (
+                    <><WifiOff className="w-5 h-5 text-muted-foreground" />
+                    <div>
+                      <p className="font-medium text-sm">No Listener Connected</p>
+                      <p className="text-xs text-muted-foreground">Customers must enter UTR manually</p>
+                    </div></>
+                  )}
+                </div>
+                <Button size="sm" variant="outline" onClick={() => setActiveTab("listeners")}>Manage</Button>
+              </div>
+            </div>
+
+            <div className="glass rounded-2xl p-5">
+              <p className="text-sm text-muted-foreground mb-2">Your Payment Link</p>
+              <div className="flex items-center gap-2">
+                <code className="flex-1 bg-muted/50 px-3 py-2 rounded-lg text-xs md:text-sm font-mono truncate">{payLink}</code>
+                <Button size="sm" variant="outline" onClick={() => copyText(payLink, "Payment link")}>
+                  <Copy className="w-4 h-4" />
+                </Button>
+              </div>
+            </div>
+
+            <div className="glass rounded-2xl p-5">
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-sm text-muted-foreground flex items-center gap-2"><Key className="w-4 h-4" /> API Key</p>
+                <Button size="sm" variant="ghost" onClick={handleRegenKey}>
+                  {regenerating ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : <RefreshCw className="w-3 h-3 mr-1" />} Regenerate
+                </Button>
+              </div>
+              <div className="flex items-center gap-2">
+                <code className="flex-1 bg-muted/50 px-3 py-2 rounded-lg text-xs md:text-sm font-mono truncate">
+                  {showApiKey ? merchant.apiKey : "ek_live_••••••••••••••••••••"}
+                </code>
+                <Button size="sm" variant="ghost" onClick={() => setShowApiKey(!showApiKey)}>
+                  {showApiKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </Button>
+                <Button size="sm" variant="outline" onClick={() => copyText(merchant.apiKey, "API key")}>
+                  <Copy className="w-4 h-4" />
+                </Button>
+              </div>
+            </div>
+
+            <div className="glass rounded-2xl p-5">
+              <h3 className="font-semibold mb-4 flex items-center gap-2 text-sm">
+                <ArrowRightLeft className="w-4 h-4 text-primary" /> Recent Transactions
+              </h3>
+              {!stats?.transactions?.length ? (
+                <div className="text-center py-10 space-y-3">
+                  <div className="w-14 h-14 rounded-2xl bg-muted/50 flex items-center justify-center mx-auto">
+                    <ArrowRightLeft className="w-6 h-6 text-muted-foreground" />
+                  </div>
+                  <p className="font-medium text-sm">No transactions yet</p>
+                  <p className="text-xs text-muted-foreground max-w-[200px] mx-auto leading-relaxed">
+                    Share your payment link to start accepting UPI payments
+                  </p>
+                  <Button size="sm" variant="outline" className="mt-2" onClick={() => {
+                    const url = `${window.location.origin}/pay?m=${merchant.id}`;
+                    navigator.clipboard.writeText(url);
+                    toast({ title: "Payment link copied! 🔗" });
+                  }}>
+                    <Copy className="w-3 h-3 mr-1.5" /> Copy Payment Link
+                  </Button>
+                </div>
+              ) : (
+                <div className="space-y-2 max-h-80 overflow-y-auto">
+                  {stats.transactions.map(tx => (
+                    <div key={tx.id} className="flex items-center justify-between p-3 rounded-lg bg-muted/30">
+                      <div className="flex items-center gap-3">
+                        {statusIcon(tx.status)}
+                        <div>
+                          <p className="text-sm font-medium">₹{tx.amount.toLocaleString("en-IN")}</p>
+                          <p className="text-xs text-muted-foreground font-mono">{tx.utr || statusLabel(tx.status)}</p>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        {tx.status === "submitted" ? (
+                          <div className="flex gap-1">
+                            <Button size="sm" variant="outline"
+                              className="h-7 text-xs text-success border-success/50 hover:bg-success/10"
+                              onClick={() => handleVerifyUtr(tx.id, "approve")}>
+                              ✅ Approve
+                            </Button>
+                            <Button size="sm" variant="outline"
+                              className="h-7 text-xs text-destructive border-destructive/50 hover:bg-destructive/10"
+                              onClick={() => handleVerifyUtr(tx.id, "reject")}>
+                              ❌ Reject
+                            </Button>
+                          </div>
+                        ) : (
+                          <div className="text-right">
+                            <span className="text-xs text-muted-foreground">
+                              {new Date(tx.timestamp).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })}
+                            </span>
+                            {tx.matchedVia === "notification_listener" && (
+                              <p className="text-[10px] text-success">⚡ auto-verified</p>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* UPI */}
+        {activeTab === "upi" && (
+          <div className="space-y-6 animate-float-in">
+            <div className="glass rounded-2xl p-5">
+              <h3 className="font-semibold mb-1">UPI VPA Management</h3>
+              <p className="text-sm text-muted-foreground mb-4">Add multiple UPI IDs. The active one receives payments. Switch to avoid daily limits.</p>
+
+              <div className="space-y-3 mb-4">
+                {merchant.vpaList?.map((vpa, i) => (
+                  <div key={vpa} className={`flex items-center justify-between p-3 rounded-lg ${i === merchant.activeVpaIndex ? "bg-primary/10 border border-primary/30" : "bg-muted/30"}`}>
+                    <div className="flex items-center gap-3">
+                      <Radio className={`w-4 h-4 ${i === merchant.activeVpaIndex ? "text-primary" : "text-muted-foreground"}`} />
+                      <div>
+                        <p className="text-sm font-mono font-medium">{vpa}</p>
+                        {i === merchant.activeVpaIndex && <p className="text-xs text-primary">Active — receiving payments</p>}
+                      </div>
+                    </div>
+                    <div className="flex gap-2">
+                      {i !== merchant.activeVpaIndex && (
+                        <>
+                          <Button size="sm" variant="ghost" onClick={() => handleSetActive(i)}>Set Active</Button>
+                          <Button size="sm" variant="ghost" onClick={() => handleRemoveVpa(vpa)}>
+                            <Trash2 className="w-4 h-4 text-destructive" />
+                          </Button>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="flex gap-2">
+                <Input value={newVpa} onChange={e => setNewVpa(e.target.value)} placeholder="newupi@paytm" className="font-mono text-sm" />
+                <Button onClick={handleAddVpa} disabled={!newVpa}>
+                  <Plus className="w-4 h-4 mr-1" /> Add
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* LISTENERS */}
+        {activeTab === "listeners" && (
+          <div className="space-y-6 animate-float-in">
+            <div className="glass rounded-2xl p-5">
+              <h3 className="font-semibold mb-1 flex items-center gap-2"><Smartphone className="w-4 h-4 text-primary" /> Notification Listeners</h3>
+              <p className="text-sm text-muted-foreground mb-4">
+                Pair an Android phone running the Eagle Pay Listener app. It reads UPI notifications (GPay, PhonePe, Paytm, bank apps) and auto-verifies payments instantly.
+              </p>
+
+              <div className="space-y-3 mb-4">
+                {devices.length === 0 && (
+                  <p className="text-sm text-muted-foreground text-center py-6">No devices paired yet</p>
+                )}
+                {devices.map(d => {
+                  const active = isDeviceActive(d);
+                  return (
+                    <div key={d.id} className="flex items-center justify-between p-3 rounded-lg bg-muted/30">
+                      <div className="flex items-center gap-3">
+                        {active ? <Wifi className="w-4 h-4 text-success" /> : <WifiOff className="w-4 h-4 text-muted-foreground" />}
+                        <div>
+                          <p className="text-sm font-medium">{d.device_name}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {active ? "Online" : d.last_seen_at ? `Last seen ${new Date(d.last_seen_at).toLocaleString()}` : "Never connected"}
+                          </p>
+                        </div>
+                      </div>
+                      <Button size="sm" variant="ghost" onClick={() => handleRemoveDevice(d.id)}>
+                        <Trash2 className="w-4 h-4 text-destructive" />
+                      </Button>
+                    </div>
+                  );
+                })}
+              </div>
+
+              <div className="flex gap-2">
+                <Input value={newDeviceName} onChange={e => setNewDeviceName(e.target.value)} placeholder="Shop counter phone" />
+                <Button onClick={handlePairDevice} disabled={pairing}>
+                  {pairing ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <QrCode className="w-4 h-4 mr-1" />}
+                  Pair Device
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* INTEGRATION */}
+        {activeTab === "integration" && (
+          <div className="space-y-6 animate-float-in">
+            <div className="glass rounded-2xl p-5">
+              <h3 className="font-semibold mb-1 flex items-center gap-2"><Webhook className="w-4 h-4 text-primary" /> Webhook URL</h3>
+              <p className="text-sm text-muted-foreground mb-4">We POST payment confirmations to this URL.</p>
+              <div className="flex gap-2">
+                <Input value={webhookUrl} onChange={e => setWebhookUrl(e.target.value)} placeholder="https://yoursite.com/api/payment-webhook" className="font-mono text-xs" />
+                <Button onClick={handleSaveWebhook} disabled={savingWebhook}>Save</Button>
+              </div>
+            </div>
+
+            <div className="glass rounded-2xl p-5">
+              <h3 className="font-semibold mb-1 flex items-center gap-2"><Code2 className="w-4 h-4 text-primary" /> Quick Start</h3>
+              <p className="text-sm text-muted-foreground mb-4">Easiest way: redirect customers to your hosted payment link.</p>
+              <pre className="bg-muted/50 rounded-lg p-3 text-xs font-mono overflow-x-auto">
+{`<a href="${payLink}">Pay with UPI</a>`}
+              </pre>
+              <p className="text-xs text-muted-foreground mt-3 mb-1 font-semibold">Webhook payload</p>
+              <pre className="bg-muted/50 rounded-lg p-3 text-xs font-mono overflow-x-auto">
+{`POST ${webhookUrl || "https://yoursite.com/webhook"}
+{
+  "event": "payment.verified",
+  "invoice_id": "INV_abc...",
+  "amount": 500,
+  "utr": "412345678901",
+  "source": "GPay",
+  "timestamp": "2026-04-18T12:00:00Z"
+}`}
+              </pre>
+            </div>
+          </div>
+        )}
+
+        {/* PROFILE - Fix 5,6,9,10,11 */}
+        {activeTab === "profile" && (
+          <div className="space-y-6 animate-float-in">
+
+            {/* Business Name */}
+            <div className="glass rounded-2xl p-5">
+              <h3 className="font-semibold mb-1 flex items-center gap-2"><User className="w-4 h-4 text-primary" /> Business Profile</h3>
+              <p className="text-sm text-muted-foreground mb-4">Update your business name shown to customers.</p>
+              <div className="flex gap-2">
+                <Input value={newBusinessName} onChange={e => setNewBusinessName(e.target.value)} placeholder="My Business" />
+                <Button onClick={handleSaveProfile} disabled={savingProfile}>
+                  {savingProfile ? <Loader2 className="w-4 h-4 animate-spin" /> : "Save"}
+                </Button>
+              </div>
+            </div>
+
+            {/* Change Password - Fix 5 */}
+            <div className="glass rounded-2xl p-5">
+              <h3 className="font-semibold mb-1 flex items-center gap-2"><Lock className="w-4 h-4 text-primary" /> Change Password</h3>
+              <p className="text-sm text-muted-foreground mb-4">Update your account password.</p>
+              <div className="space-y-3">
+                <div className="relative">
+                  <Input
+                    type={showNewPw ? "text" : "password"}
+                    value={newPassword}
+                    onChange={e => setNewPassword(e.target.value)}
+                    placeholder="New password (min 6 chars)"
+                    minLength={6}
+                  />
+                  <button className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground" onClick={() => setShowNewPw(!showNewPw)}>
+                    {showNewPw ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+                <Button className="w-full" onClick={handleChangePassword} disabled={savingPassword || newPassword.length < 6}>
+                  {savingPassword ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <Lock className="w-4 h-4 mr-1" />}
+                  Update Password
+                </Button>
+              </div>
+            </div>
+
+            {/* Match Window - Fix 6 */}
+            <div className="glass rounded-2xl p-5">
+              <h3 className="font-semibold mb-1 flex items-center gap-2"><Clock className="w-4 h-4 text-primary" /> Payment Match Window</h3>
+              <p className="text-sm text-muted-foreground mb-4">How long to look back for matching payments (in minutes). Default: 5 min.</p>
+              <div className="flex gap-2 items-center">
+                <Input
+                  type="number"
+                  value={matchWindow}
+                  onChange={e => setMatchWindow(Number(e.target.value))}
+                  min={1} max={60}
+                  className="w-24"
+                />
+                <span className="text-sm text-muted-foreground">minutes</span>
+                <Button onClick={handleSaveMatchWindow} disabled={savingWindow}>
+                  {savingWindow ? <Loader2 className="w-4 h-4 animate-spin" /> : "Save"}
+                </Button>
+              </div>
+            </div>
+
+            {/* Export CSV - Fix 11 */}
+            <div className="glass rounded-2xl p-5">
+              <h3 className="font-semibold mb-1 flex items-center gap-2"><Download className="w-4 h-4 text-primary" /> Export Transactions</h3>
+              <p className="text-sm text-muted-foreground mb-4">Download your transaction history as a CSV file.</p>
+              <Button variant="outline" onClick={handleExportCSV} disabled={!stats?.transactions?.length}>
+                <Download className="w-4 h-4 mr-2" /> Download CSV ({stats?.transactions?.length ?? 0} transactions)
+              </Button>
+            </div>
+
+            {/* Privacy & Terms - Fix 7,8 */}
+            <div className="glass rounded-2xl p-5">
+              <h3 className="font-semibold mb-3 flex items-center gap-2"><FileText className="w-4 h-4 text-primary" /> Legal</h3>
+              <div className="space-y-2">
+                <a href="/privacy" className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors">
+                  <FileText className="w-4 h-4" /> Privacy Policy
+                </a>
+                <a href="/terms" className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors">
+                  <FileText className="w-4 h-4" /> Terms of Service
+                </a>
+              </div>
+            </div>
+
+            {/* Fix 11: APK Release Guide */}
+            <div className="glass rounded-2xl p-5">
+              <h3 className="font-semibold mb-1 flex items-center gap-2">
+                <Download className="w-4 h-4 text-primary" /> Upload APK to GitHub Releases
+              </h3>
+              <p className="text-sm text-muted-foreground mb-3">So the download button on your landing page works.</p>
+              <div className="bg-muted/30 rounded-lg p-3 text-xs font-mono space-y-1">
+                <p className="text-muted-foreground"># In Termux, after building APK:</p>
+                <p>cd ~/UPI-listner</p>
+                <p>gh release create v1.0.0 app/build/outputs/apk/debug/app-debug.apk</p>
+              </div>
+              <p className="text-xs text-muted-foreground mt-2">Or go to github.com → your repo → Releases → Create new release → Upload APK</p>
+            </div>
+
+            {/* Fix 12: Custom Domain Guide */}
+            <div className="glass rounded-2xl p-5">
+              <h3 className="font-semibold mb-1 flex items-center gap-2">
+                <FileText className="w-4 h-4 text-primary" /> Add Custom Domain
+              </h3>
+              <p className="text-sm text-muted-foreground mb-3">Replace vercel.app with your own domain.</p>
+              <div className="space-y-2 text-xs text-muted-foreground">
+                <p>1. Buy domain at <span className="text-primary">namecheap.com</span> or <span className="text-primary">bigrock.in</span></p>
+                <p>2. Go to <span className="text-primary">vercel.com</span> → your project → Settings → Domains</p>
+                <p>3. Add your domain → copy the DNS records shown</p>
+                <p>4. Add DNS records in your domain registrar</p>
+                <p>5. Wait 5-10 minutes → your site is live on custom domain ✅</p>
+              </div>
+            </div>
+
+            {/* Danger Zone */}
+            <div className="glass rounded-2xl p-5 border border-destructive/30">
+              <h3 className="font-semibold mb-1 text-destructive flex items-center gap-2"><AlertCircle className="w-4 h-4" /> Danger Zone</h3>
+              <p className="text-sm text-muted-foreground mb-4">Permanently delete your account and all data. This cannot be undone.</p>
+              <Button variant="outline" className="border-destructive text-destructive hover:bg-destructive/10" onClick={handleDeleteAccount}>
+                Delete Account
+              </Button>
+            </div>
+
+          </div>
+        )}
+      </div>
+
+      {/* Pairing dialog */}
+      {/* Pairing Modal — custom fullscreen overlay instead of Dialog for mobile */}
+      {pairingDialog && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
+          <div className="absolute inset-0 bg-black/60" onClick={() => setPairingDialog(null)} />
+          <div className="relative w-full sm:max-w-sm bg-background rounded-t-2xl sm:rounded-2xl p-5 space-y-4 max-h-[90vh] overflow-y-auto">
+            {/* Header */}
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="font-bold text-base">Pair Your Phone</h2>
+                <p className="text-xs text-muted-foreground mt-0.5">Open Eagle Pay Listener app and scan</p>
+              </div>
+              <button className="text-muted-foreground hover:text-foreground p-1" onClick={() => setPairingDialog(null)}>
+                ✕
+              </button>
+            </div>
+
+            {/* QR Code — perfectly centered, full width */}
+            <div className="bg-white rounded-2xl flex justify-center items-center p-4 w-full">
+              <QRCodeSVG
+                value={pairingDialog.payload}
+                size={Math.min(240, window.innerWidth - 80)}
+                level="M"
+              />
+            </div>
+
+            {/* Webhook URL */}
+            <div>
+              <p className="text-xs text-muted-foreground mb-1.5">Webhook URL</p>
+              <div className="flex items-center gap-2 bg-muted/40 rounded-xl px-3 py-2.5">
+                <code className="flex-1 text-[10px] font-mono truncate min-w-0 text-foreground">
+                  {pairingDialog.webhook}
+                </code>
+                <Button size="sm" variant="ghost" className="shrink-0 h-6 w-6 p-0" onClick={() => copyText(pairingDialog.webhook, "Webhook URL")}>
+                  <Copy className="w-3 h-3" />
+                </Button>
+              </div>
+            </div>
+
+            {/* Device Token */}
+            <div>
+              <p className="text-xs text-muted-foreground mb-1.5">Device Token <span className="text-destructive">(keep secret)</span></p>
+              <div className="flex items-center gap-2 bg-muted/40 rounded-xl px-3 py-2.5">
+                <code className="flex-1 text-[10px] font-mono truncate min-w-0 text-foreground">
+                  {pairingDialog.token}
+                </code>
+                <Button size="sm" variant="ghost" className="shrink-0 h-6 w-6 p-0" onClick={() => copyText(pairingDialog.token, "Device token")}>
+                  <Copy className="w-3 h-3" />
+                </Button>
+              </div>
+            </div>
+
+            <p className="text-xs text-muted-foreground text-center pb-1">
+            <p className="text-xs text-muted-foreground text-center pb-1">
+            <p className="text-xs text-muted-foreground text-center pb-1">
+              Device appears "Online" after first heartbeat ping.
+            </p>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
