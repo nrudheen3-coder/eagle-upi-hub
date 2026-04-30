@@ -863,3 +863,4 @@ export default function Dashboard({ initialMerchant }: DashboardProps) {
   </div>
   );
 }
+// fixed
