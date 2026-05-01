@@ -98,7 +98,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (m?.webhook_url && isSafeUrl(m.webhook_url)) {
       fireWebhookWithRetry(m.webhook_url, {
         event: "payment.utr_submitted", invoice_id, utr: cleanUtr, timestamp: new Date().toISOString(),
-      }, process.env.WEBHOOK_SECRET ?? "default_secret").catch(console.error);
+      }, (process.env.WEBHOOK_SECRET || (() => { console.warn("[SECURITY] WEBHOOK_SECRET not set - using insecure default!"); return "default_secret"; })())).catch(console.error);
     }
 
     return res.status(200).json({ success: true });

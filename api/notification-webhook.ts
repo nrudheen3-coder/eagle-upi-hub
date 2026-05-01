@@ -40,6 +40,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const deviceToken = req.headers["x-device-token"] as string;
   if (!deviceToken) return res.status(401).json({ error: "missing X-Device-Token" });
+  // Fix 5: validate device token format (must start with dvc_ and be alphanumeric)
+  if (!/^dvc_[a-f0-9]{32}$/.test(deviceToken)) return res.status(401).json({ error: "invalid token format" });
 
   // Rate limit per device token
   if (isWebhookRateLimited(deviceToken)) return res.status(429).json({ error: "too many requests" });
@@ -113,7 +115,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           });
           fetch(merchant.webhook_url, {
             method: "POST",
-            headers: { "Content-Type": "application/json", "X-EaglePay-Signature": hmacSign(process.env.WEBHOOK_SECRET ?? "default_secret", payload) },
+            headers: { "Content-Type": "application/json", "X-EaglePay-Signature": hmacSign((process.env.WEBHOOK_SECRET || (() => { console.warn("[SECURITY] WEBHOOK_SECRET not set - using insecure default!"); return "default_secret"; })()), payload) },
             body: payload,
           }).catch(console.error);
         }

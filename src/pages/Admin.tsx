@@ -38,9 +38,29 @@ export default function Admin() {
   const [updating, setUpdating] = useState<string | null>(null);
   const { toast } = useToast();
 
+  // Security Fix 1: verify admin role on every data fetch
+  const verifyAdmin = async (): Promise<boolean> => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return false;
+    const { data } = await supabase
+      .from("user_roles")
+      .select("role")
+      .eq("user_id", user.id)
+      .eq("role", "admin")
+      .maybeSingle();
+    return !!data;
+  };
+
   const fetchMerchants = useCallback(async () => {
     setLoading(true);
     try {
+      // Verify admin on every fetch
+      const isAdminUser = await verifyAdmin();
+      if (!isAdminUser) {
+        await supabase.auth.signOut();
+        window.location.href = "/";
+        return;
+      }
       const { data, error } = await supabase
         .from("merchants")
         .select("id, user_id, business_name, plan, plan_expires_at, monthly_tx_count, api_key, webhook_url, created_at")

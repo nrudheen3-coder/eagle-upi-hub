@@ -42,6 +42,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     const { merchant_id, amount, customer_name } = req.body;
     if (!merchant_id) return res.status(400).json({ error: "merchant_id required" });
+    // Fix 6: validate UUID format
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(merchant_id))) {
+      return res.status(400).json({ error: "invalid merchant_id format" });
+    }
 
     const amt = Number(amount);
     if (!Number.isFinite(amt) || amt <= 0 || amt > 200000) {

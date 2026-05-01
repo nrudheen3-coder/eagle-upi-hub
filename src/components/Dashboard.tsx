@@ -106,7 +106,7 @@ export default function Dashboard({ initialMerchant }: DashboardProps) {
   };
 
   const handleRemoveVpa = async (vpa: string) => {
-    if (merchant.vpaList.length <= 1) {
+    if ((merchant.vpaList?.length ?? 0) <= 1) {
       toast({ title: "Cannot Remove", description: "You need at least one UPI ID.", variant: "destructive" });
       return;
     }
@@ -386,8 +386,8 @@ export default function Dashboard({ initialMerchant }: DashboardProps) {
                     <IndianRupee className="w-4 h-4 text-primary" /> Last 7 Days Revenue
                   </h3>
                   <div className="flex gap-3 text-xs text-muted-foreground">
-                    <span className="flex items-center gap-1"><CheckCircle2 className="w-3 h-3 text-success" /> {stats.verifiedCount} verified</span>
-                    <span className="flex items-center gap-1"><Clock className="w-3 h-3 text-warning" /> {stats.pendingCount} pending</span>
+                    <span className="flex items-center gap-1"><CheckCircle2 className="w-3 h-3 text-success" /> {stats.verifiedCount ?? 0} verified</span>
+                    <span className="flex items-center gap-1"><Clock className="w-3 h-3 text-warning" /> {stats.pendingCount ?? 0} pending</span>
                   </div>
                 </div>
                 <ResponsiveContainer width="100%" height={140}>
@@ -860,6 +860,6 @@ export default function Dashboard({ initialMerchant }: DashboardProps) {
         </div>
       )}
     </div>
+  </div>
   );
 }
-
